@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <title>Mufattish - المفتش التربوي</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <script src="https://apis.google.com/js/api.js" async defer></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Cairo', 'sans-serif'],
+              serif: ['Amiri', 'serif'],
+            },
+            colors: {
+              primary: '#1e3a8a',
+              secondary: '#f8fafc',
+            },
+            screens: {
+              'print': {'raw': 'print'},
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      /* --- PRINT STYLES (CRITICAL FIXES) --- */
+      @media print {
+        @page { 
+            size: A4 portrait; 
+            margin: 0 !important; /* إلغاء هوامش المتصفح الافتراضية */
+        }
+        
+        /* إعادة تعيين إجبارية لكل الحاويات للسماح بتعدد الصفحات */
+        html, body, #root, #root > div {
+            width: 100% !important;
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: visible !important; /* هذا هو السر لظهور الصفحة الثانية */
+            margin: 0 !important;
+            padding: 0 !important;
+            position: static !important;
+            display: block !important;
+            background: white !important;
+        }
+
+        /* إخفاء واجهة التطبيق */
+        .print\:hidden, nav, aside, .no-print {
+            display: none !important;
+        }
+
+        /* إظهار التقرير */
+        .print\:block {
+            display: block !important;
+            height: auto !important;
+            overflow: visible !important;
+        }
+        
+        /* حاوية الصفحة A4 */
+        .a4-page {
+            width: 210mm;
+            height: 296mm; /* أقل بـ 1مم لتجنب إنشاء صفحة ثالثة فارغة */
+            padding: 12mm 15mm; /* هوامش داخلية مريحة */
+            margin: 0 auto;
+            background: white;
+            position: relative;
+            box-sizing: border-box;
+            page-break-after: always; /* فرض صفحة جديدة */
+            page-break-inside: avoid;
+            display: flex;
+            flex-direction: column;
+            border: none !important; /* إزالة حدود المعاينة */
+        }
+
+        .a4-page:last-child {
+            page-break-after: auto;
+        }
+        
+        /* ضمان ظهور الحدود السوداء */
+        * { border-color: #000 !important; }
+      }
+      
+      /* --- SCREEN PREVIEW STYLES --- */
+      @media screen {
+          .a4-page {
+              width: 210mm;
+              height: 297mm;
+              padding: 12mm 15mm;
+              margin: 40px auto;
+              background: white;
+              box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+              border: 1px solid #e2e8f0;
+              box-sizing: border-box;
+              display: flex;
+              flex-direction: column;
+          }
+      }
+    </style>
+
+  <script type="importmap">
+{
+  "imports": {
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.7",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+  }
+}
+</script>
+  <script type="module" crossorigin src="/assets/index--AtoZsVM.js"></script>
+</head>
+  <body class="bg-slate-900 text-gray-900 font-sans h-screen overflow-hidden selection:bg-blue-500 selection:text-white">
+    <div id="root"></div>
+  </body>
+</html>
