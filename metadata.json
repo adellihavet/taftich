@@ -1,0 +1,7 @@
+{
+  "name": "Mufattish - Educational Report Generator",
+  "description": "An automated tool for educational inspectors to generate, manage, and print pedagogical inspection reports using AI for assessment synthesis.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
