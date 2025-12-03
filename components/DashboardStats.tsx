@@ -346,9 +346,19 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
             if (twoYearsMark > cutOffDate) return false;
             const currentEchelon = parseInt(t.echelon);
             const maxAllowedMark = 13 + (currentEchelon * 0.5);
-            return t.lastMark < maxAllowedMark;
+            if (t.lastMark >= maxAllowedMark) return false;
+
+            // Update: Exclude those with completed reports (date and mark filled)
+            const activeReport = reportsMap[t.id];
+            if (activeReport) {
+                const isDateFilled = activeReport.inspectionDate && activeReport.inspectionDate.trim() !== '';
+                const isMarkFilled = activeReport.finalMark !== undefined && activeReport.finalMark > 0;
+                if (isDateFilled && isMarkFilled) return false;
+            }
+
+            return true;
         }).length;
-    }, [teachers, currentYear]);
+    }, [teachers, currentYear, reportsMap]);
 
     // Pie Chart Gradient
     const totalStatus = totalTeachers || 1;
@@ -725,7 +735,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
                                                 <div className={`h-8 ${group.color} rounded-sm flex items-center justify-center text-white text-xs font-bold transition-all hover:scale-105 cursor-pointer shadow-sm`} style={{ width: `${displayWidth}%`, minWidth: '120px' }} title={`${group.label}: ${group.count} أستاذ`}>
                                                    {group.count}
                                                 </div>
-                                                <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full pr-2 text-[10px] text-gray-400 w-32 hidden md:block">{group.label}</div>
+                                                <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 pr-2 text-[10px] text-gray-400 w-32 hidden md:block">{group.label}</div>
                                             </div>
                                         )
                                     })}

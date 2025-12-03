@@ -15,6 +15,7 @@ const PromotionList: React.FC<PromotionListProps> = ({ teachers, reportsMap }) =
     // Logic to identify candidates based on selected year
     const promotionCandidates = useMemo(() => {
         return teachers.filter(t => {
+            // 1. Basic Eligibility Checks
             // Must be Titulaire and have an Echelon
             if (t.status !== 'titulaire' || !t.echelonDate || !t.echelon) return false;
 
@@ -38,6 +39,23 @@ const PromotionList: React.FC<PromotionListProps> = ({ teachers, reportsMap }) =
 
             // If current mark is already >= max, no visit needed (ceiling reached)
             if (t.lastMark >= maxAllowedMark) return false;
+
+            // ---------------------------------------------------------
+            // منطق الحذف المطلوب: إذا تم ملء التاريخ والعلامة معاً
+            // ---------------------------------------------------------
+            const activeReport = reportsMap[t.id];
+            if (activeReport) {
+                // هل حقل التاريخ ممتلئ؟
+                const isDateFilled = activeReport.inspectionDate && activeReport.inspectionDate.trim() !== '';
+                // هل حقل العلامة ممتلئ (أكبر من 0)؟
+                const isMarkFilled = activeReport.finalMark !== undefined && activeReport.finalMark > 0;
+
+                // إذا تحقق الشرطان معاً، يتم حذف الأستاذ من القائمة
+                if (isDateFilled && isMarkFilled) {
+                    return false; 
+                }
+            }
+            // ---------------------------------------------------------
 
             return true;
         }).map(t => {
@@ -67,7 +85,7 @@ const PromotionList: React.FC<PromotionListProps> = ({ teachers, reportsMap }) =
                         قائمة المعنيين بالترقية
                     </h1>
                     <p className="text-gray-500 mt-2">
-                        الأساتذة الذين يستوفون أقدمية سنتين ونقطتهم أقل من سقف الدرجة.
+                        الأساتذة الذين يستوفون أقدمية سنتين ونقطتهم أقل من سقف الدرجة (يختفي من القائمة من سُجلت له علامة وتاريخ زيارة).
                     </p>
                 </div>
                 
@@ -154,7 +172,7 @@ const PromotionList: React.FC<PromotionListProps> = ({ teachers, reportsMap }) =
                 <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-dashed border-gray-300">
                     <CheckCircle2 size={64} className="text-green-500 mb-4 opacity-20" />
                     <h3 className="text-xl font-bold text-gray-400">لا توجد حالات تستدعي الزيارة لعام {campaignYear}</h3>
-                    <p className="text-gray-400 mt-2">إما أن الجميع لم يستوفوا الأقدمية، أو وصلوا للسقف الأعلى للنقاط.</p>
+                    <p className="text-gray-400 mt-2">إما أن الجميع لم يستوفوا الأقدمية، أو وصلوا للسقف الأعلى، أو تمت زيارتهم (تم تسجيل التاريخ والعلامة).</p>
                 </div>
             )}
             

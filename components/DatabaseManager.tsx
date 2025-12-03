@@ -2,8 +2,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Teacher, ReportData, TenureReportData } from '../types';
 import { generateDatabaseRows, parseDatabaseRows } from '../utils/sheetHelper';
-import { initializeGoogleApi, handleAuthClick, createAndPopulateSheet, readSheetData, trySilentAuth, clearAndOverwriteSheet } from '../services/sheetsService';
-import { Database, RefreshCcw, CheckCircle2, AlertCircle, ExternalLink, Lock, Settings, Wifi, WifiOff, HelpCircle, AlertTriangle, Zap, CloudLightning, HardDrive, Download, Upload } from 'lucide-react';
+import { syncWithScript, readFromScript } from '../services/sheetsService';
+import { saveScriptUrlToCloud, isSupabaseConfigured } from '../services/supabaseService';
+import { Database, RefreshCcw, CheckCircle2, AlertCircle, ExternalLink, HardDrive, Download, Upload, CloudLightning, HelpCircle, Link, AlertTriangle, Cloud } from 'lucide-react';
 import GoogleSetupGuide from './GoogleSetupGuide';
 
 interface DatabaseManagerProps {
@@ -17,35 +18,11 @@ interface DatabaseManagerProps {
     ) => void;
     currentReport?: ReportData;
     
-    // New Props for Delegated Control
     isConnected: boolean;
     onConnectionChange: (status: boolean) => void;
     isAutoSync: boolean;
     onAutoSyncChange: (enabled: boolean) => void;
 }
-
-const getErrorMessage = (error: any): string => {
-    if (!error) return "حدث خطأ غير معروف";
-    if (typeof error === 'string') return error;
-    if (error instanceof Error) return error.message;
-    if (error.result?.error?.message && typeof error.result.error.message === 'string') {
-        return error.result.error.message;
-    }
-    if (error.error) {
-        if (typeof error.error === 'string') return error.error;
-        if (typeof error.error === 'object' && error.error.message && typeof error.error.message === 'string') {
-            return error.error.message;
-        }
-    }
-    if (error.message && typeof error.message === 'string') return error.message;
-    try {
-        const json = JSON.stringify(error, null, 2);
-        if (json === '{}') return "خطأ غير محدد (Unknown Error)";
-        return json;
-    } catch (e) {
-        return "خطأ غير قابل للعرض";
-    }
-};
 
 const DatabaseManager: React.FC<DatabaseManagerProps> = ({ 
     teachers, reportsMap, tenureReportsMap, onRestore, currentReport,
@@ -55,27 +32,17 @@ const DatabaseManager: React.FC<DatabaseManagerProps> = ({
     const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
     const [message, setMessage] = useState('');
     const [showGuide, setShowGuide] = useState(false);
+    
+    const [scriptUrl, setScriptUrl] = useState('');
+    
     const fileInputRef = useRef<HTMLInputElement>(null);
-    
-    const [showConfig, setShowConfig] = useState(false);
-    
-    const [apiKey, setApiKey] = useState(''); 
-    const [clientId, setClientId] = useState(''); 
-    const [spreadsheetId, setSpreadsheetId] = useState('');
 
-    // Load credentials
+    // Load saved URL from LocalStorage
     useEffect(() => {
-        const savedSheetId = localStorage.getItem('mufattish_sheet_id');
-        const savedClientId = localStorage.getItem('mufattish_client_id');
-        const savedApiKey = localStorage.getItem('mufattish_sheets_api_key');
-        
-        if (savedSheetId) setSpreadsheetId(savedSheetId);
-        if (savedClientId) setClientId(savedClientId);
-        if (savedApiKey) setApiKey(savedApiKey);
-
-        // Auto-show config if keys missing
-        if (!savedClientId || !savedApiKey) {
-            setShowConfig(true);
+        const savedUrl = localStorage.getItem('mufattish_script_url');
+        if (savedUrl) {
+            setScriptUrl(savedUrl);
+            onConnectionChange(true);
         }
     }, []);
 
@@ -85,132 +52,82 @@ const DatabaseManager: React.FC<DatabaseManagerProps> = ({
         localStorage.setItem('mufattish_auto_sync', String(newState));
     };
 
-    const handleConnect = async (forcePopup: boolean = true) => {
-        setStatus('idle');
-        setMessage('');
-
-        if(!apiKey || !clientId) {
-             setStatus('error');
-             setMessage('يرجى إدخال مفتاح API و Client ID للاتصال بخدمات جوجل.');
-             setShowConfig(true);
-             return;
-        }
-
-        const cleanApiKey = apiKey.trim();
-        const cleanClientId = clientId.trim();
-
-        if (cleanApiKey.includes('.apps.googleusercontent.com')) {
+    const handleSaveUrl = async () => {
+        if (!scriptUrl.includes('script.google.com')) {
             setStatus('error');
-            setMessage('خطأ: لقد قمت بوضع "Client ID" في خانة "API Key". يرجى نقله للخانة الصحيحة.');
+            setMessage('الرابط غير صحيح. يجب أن يبدأ بـ script.google.com');
             return;
         }
-
-        if (cleanClientId.startsWith('AIza')) {
-             setStatus('error');
-             setMessage('خطأ: لقد قمت بوضع "API Key" في خانة "Client ID". يرجى نقله للخانة الصحيحة.');
-             return;
+        
+        localStorage.setItem('mufattish_script_url', scriptUrl);
+        
+        // Save to Cloud if user is logged in
+        if (isSupabaseConfigured()) {
+            saveScriptUrlToCloud(scriptUrl);
         }
 
+        onConnectionChange(true);
+        setStatus('success');
+        setMessage('تم حفظ الرابط بنجاح.');
+    };
+
+    const handleSync = async () => {
+        if (!scriptUrl) {
+             setStatus('error');
+             setMessage('يرجى إدخال رابط السكريبت أولاً.');
+             return;
+        }
+        
         setIsLoading(true);
+        setMessage('جاري رفع البيانات إلى Google Sheet...');
+
         try {
-            await initializeGoogleApi(cleanApiKey, cleanClientId);
-            
-            if (forcePopup) {
-                await handleAuthClick(false);
-            } else {
-                const silent = await trySilentAuth();
-                if (!silent) await handleAuthClick(false);
-            }
-            
-            onConnectionChange(true);
-            
-            localStorage.setItem('mufattish_client_id', cleanClientId);
-            localStorage.setItem('mufattish_sheets_api_key', cleanApiKey);
+            const data = generateDatabaseRows(teachers, currentReport, reportsMap);
+            await syncWithScript(scriptUrl, data);
             
             setStatus('success');
-            setMessage('تم الاتصال بحساب Google بنجاح!');
-            setShowConfig(false);
+            setMessage('تمت المزامنة وحفظ البيانات بنجاح!');
         } catch (error: any) {
             console.error(error);
             setStatus('error');
-            setMessage(`فشل الاتصال: ${getErrorMessage(error)}`);
-            onConnectionChange(false);
+            setMessage(`فشل المزامنة: ${error.message}`);
         } finally {
             setIsLoading(false);
         }
     };
 
-    const handleCreate = async () => {
-        if (!isConnected) {
-             await handleConnect(true);
-             if (!isConnected) return; // Wait for callback/effect
-        }
-        
+    const handleFetch = async () => {
+        if (!scriptUrl) return;
+
         setIsLoading(true);
-        setMessage('جاري إنشاء ملف Google Sheet...');
+        setMessage('جاري جلب البيانات من Google Sheet...');
 
         try {
-            if (teachers.length === 0) {
-                // Allow empty sheet creation but warn
-                console.warn("Creating empty sheet...");
+            const values = await readFromScript(scriptUrl);
+            
+            if (!Array.isArray(values)) {
+                throw new Error("تنسيق البيانات المستلمة غير صحيح");
             }
 
-            const data = generateDatabaseRows(teachers, currentReport, reportsMap);
-            const { spreadsheetId: newId, spreadsheetUrl } = await createAndPopulateSheet(
-                'قاعدة بيانات المفتش التربوي', 
-                data
-            );
-
-            setSpreadsheetId(newId);
-            localStorage.setItem('mufattish_sheet_id', newId);
-            
-            setStatus('success');
-            setMessage('تم إنشاء القاعدة وفتحها في نافذة جديدة.');
-            window.open(spreadsheetUrl, '_blank');
-        } catch (error: any) {
-            setStatus('error');
-            setMessage(`فشل إنشاء الملف: ${getErrorMessage(error)}`);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleManualRestore = async () => {
-        if (!isConnected) {
-             try {
-                await handleConnect(true);
-             } catch (e) { return; }
-        }
-        
-        if (!spreadsheetId) {
-            setStatus('error');
-            setMessage('لا يوجد معرف ملف (Spreadsheet ID).');
-            return;
-        }
-
-        setIsLoading(true);
-        setMessage('جاري قراءة البيانات من Google Sheet...');
-
-        try {
-            const values = await readSheetData(spreadsheetId);
             const { teachers: newTeachers, reportsMap: parsedReports } = parseDatabaseRows(values);
 
             if (newTeachers.length === 0) {
-                throw new Error("الملف فارغ أو التنسيق غير صحيح.");
+                setMessage("تم الاتصال بنجاح، لكن الملف فارغ.");
+                setStatus('success');
+            } else {
+                onRestore(newTeachers, parsedReports, tenureReportsMap);
+                setStatus('success');
+                setMessage(`تم استرجاع ${newTeachers.length} أستاذ بنجاح!`);
             }
-
-            onRestore(newTeachers, parsedReports, tenureReportsMap);
-            setStatus('success');
-            setMessage(`تمت الاستعادة بنجاح! (${newTeachers.length} أستاذ)`);
         } catch (error: any) {
+            console.error(error);
             setStatus('error');
-            setMessage(`فشل في الاستعادة: ${getErrorMessage(error)}`);
+            setMessage(`فشل الاسترجاع: ${error.message}`);
         } finally {
             setIsLoading(false);
         }
     };
 
-    // --- JSON Backup Handlers ---
     const handleDownloadJSON = () => {
         const backupData = {
             version: "1.0",
@@ -221,10 +138,11 @@ const DatabaseManager: React.FC<DatabaseManagerProps> = ({
             settings: {
                 inspectorName: localStorage.getItem('mufattish_inspector_name'),
                 signature: localStorage.getItem('mufattish_signature'),
-                isGold: localStorage.getItem('mufattish_is_gold') === 'true'
+                isGold: localStorage.getItem('mufattish_is_gold') === 'true',
+                // نحفظ الرابط هنا لسهولة النقل لجهاز آخر
+                scriptUrl: localStorage.getItem('mufattish_script_url') 
             }
         };
-        
         const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -233,45 +151,44 @@ const DatabaseManager: React.FC<DatabaseManagerProps> = ({
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        
-        setStatus('success');
-        setMessage('تم تحميل النسخة الاحتياطية بنجاح.');
     };
 
-    const handleRestoreJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleRestoreJSON = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
         
         const reader = new FileReader();
-        reader.onload = (event) => {
+        reader.onload = async (event) => {
             try {
                 const json = JSON.parse(event.target?.result as string);
-                if (json.teachers && Array.isArray(json.teachers)) {
-                    if(window.confirm('هل أنت متأكد من استرجاع البيانات؟ سيتم استبدال البيانات الحالية.')) {
+                if (json.teachers) {
+                    if(window.confirm('هل أنت متأكد؟ سيتم دمج/استبدال البيانات.')) {
                         onRestore(json.teachers, json.reportsMap || {}, json.tenureReportsMap || {});
                         
-                        if(json.settings) {
-                            if(json.settings.inspectorName) localStorage.setItem('mufattish_inspector_name', json.settings.inspectorName);
-                            if(json.settings.signature) localStorage.setItem('mufattish_signature', json.settings.signature);
-                            if(json.settings.isGold) localStorage.setItem('mufattish_is_gold', 'true');
+                        // استرجاع الإعدادات والرابط إن وجد
+                        if (json.settings) {
+                            if (json.settings.scriptUrl) {
+                                setScriptUrl(json.settings.scriptUrl);
+                                localStorage.setItem('mufattish_script_url', json.settings.scriptUrl);
+                                onConnectionChange(true);
+                            }
+                            if (json.settings.inspectorName) {
+                                localStorage.setItem('mufattish_inspector_name', json.settings.inspectorName);
+                            }
                         }
-                        
+
                         setStatus('success');
-                        setMessage(`تم الاسترجاع بنجاح: ${json.teachers.length} أستاذ.`);
+                        setMessage('تم استرجاع البيانات والإعدادات بنجاح.');
                     }
-                } else {
-                    throw new Error("تنسيق الملف غير صالح");
                 }
             } catch (err) {
                 setStatus('error');
-                setMessage('فشل قراءة ملف النسخة الاحتياطية.');
+                setMessage('ملف غير صالح.');
             }
-            if (fileInputRef.current) fileInputRef.current.value = '';
         };
         reader.readAsText(file);
+        if (fileInputRef.current) fileInputRef.current.value = '';
     };
-
-    const isOriginError = message.toLowerCase().includes('invalid_request') || message.includes('400');
 
     return (
         <div className="p-8 max-w-5xl mx-auto animate-in fade-in duration-500">
@@ -283,84 +200,90 @@ const DatabaseManager: React.FC<DatabaseManagerProps> = ({
                 </div>
                 <h1 className="text-3xl font-bold text-gray-800 mb-2 font-serif">إدارة قاعدة البيانات</h1>
                 <p className="text-gray-500 max-w-lg mx-auto">
-                    اختر الطريقة التي تفضلها لحفظ وتأمين بياناتك التربوية.
+                    اربط التطبيق بملف Google Sheet الخاص بك للوصول لبياناتك من أي مكان، أو احتفظ بنسخة محلية آمنة.
                 </p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 
-                {/* OPTION 1: GOOGLE SHEETS */}
+                {/* OPTION 1: GOOGLE SHEETS (SIMPLE SCRIPT METHOD) */}
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden relative group">
                     <div className="bg-green-50 p-4 border-b border-green-100 flex items-center justify-between">
                         <h2 className="font-bold text-green-900 flex items-center gap-2">
                             <CloudLightning size={20}/>
-                            Google Sheets (سحابي)
+                            Google Sheets (الربط السريع)
                         </h2>
-                        <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-400'}`} title={isConnected ? 'متصل' : 'غير متصل'}></div>
+                        <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} title={isConnected ? 'متصل' : 'غير متصل'}></div>
                     </div>
                     
                     <div className="p-6">
-                        <p className="text-sm text-gray-500 mb-6 min-h-[40px]">
-                            حفظ البيانات ومزامنتها مباشرة مع ملف Google Sheet في حسابك. يعمل في الخلفية تلقائياً بعد الاتصال.
+                        <p className="text-sm text-gray-500 mb-4 min-h-[40px]">
+                            الربط بملف Google Sheet يسمح لك بالعمل من أي مكان. سيتم حفظ الرابط في متصفحك الحالي فقط.
                         </p>
 
-                        {!isConnected && (
-                            <div className="mb-4">
+                        {!isConnected ? (
+                            <div className="space-y-3">
                                 <button 
-                                    onClick={() => showConfig ? handleConnect(true) : setShowConfig(true)}
-                                    className="w-full bg-green-700 text-white py-2 rounded-lg font-bold hover:bg-green-800 transition-colors"
+                                    onClick={() => setShowGuide(true)}
+                                    className="w-full bg-blue-50 text-blue-700 py-3 rounded-xl font-bold text-sm border border-blue-100 hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
                                 >
-                                    {showConfig ? 'حفظ واتصال' : 'إعداد الاتصال'}
+                                    <HelpCircle size={16} />
+                                    شاهد طريقة الحصول على الرابط
+                                </button>
+                                
+                                <div className="relative">
+                                    <input 
+                                        placeholder="لصق رابط Web App URL هنا..." 
+                                        className="w-full p-3 pl-10 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                                        value={scriptUrl}
+                                        onChange={e => setScriptUrl(e.target.value)}
+                                    />
+                                    <Link className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                </div>
+
+                                <button 
+                                    onClick={handleSaveUrl}
+                                    disabled={isLoading}
+                                    className="w-full bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
+                                >
+                                    {isLoading ? <RefreshCcw className="animate-spin" size={18}/> : <Cloud size={18}/>}
+                                    حفظ الرابط والاتصال
                                 </button>
                             </div>
-                        )}
-
-                        {showConfig && (
-                            <div className="bg-gray-50 p-4 rounded-lg border mb-4 text-sm animate-in slide-in-from-top-2">
-                                <div className="space-y-3">
-                                    <input placeholder="Client ID" className="w-full p-2 border rounded" value={clientId} onChange={e => setClientId(e.target.value)} />
-                                    <input placeholder="API Key" className="w-full p-2 border rounded" value={apiKey} onChange={e => setApiKey(e.target.value)} />
-                                    <div className="flex justify-between items-center">
-                                        <button onClick={() => setShowGuide(true)} className="text-blue-600 text-xs underline">كيف أحصل عليها؟</button>
-                                        <button onClick={() => setShowConfig(false)} className="text-gray-500 text-xs">إلغاء</button>
-                                    </div>
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="bg-green-50 p-3 rounded-lg border border-green-100 flex items-center gap-2 text-green-800 text-sm">
+                                    <CheckCircle2 size={16} />
+                                    <span>التطبيق متصل بملفك بنجاح.</span>
                                 </div>
-                            </div>
-                        )}
 
-                        {isConnected && (
-                            <div className="space-y-3">
-                                <input 
-                                    placeholder="Spreadsheet ID (للمزامنة)" 
-                                    className="w-full p-2 border rounded text-xs font-mono mb-2" 
-                                    value={spreadsheetId} 
-                                    onChange={e => {
-                                        setSpreadsheetId(e.target.value);
-                                        localStorage.setItem('mufattish_sheet_id', e.target.value);
-                                    }} 
-                                />
                                 <div className="flex gap-2">
                                     <button 
-                                        onClick={handleCreate} 
-                                        className="flex-1 bg-green-600 text-white py-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1 hover:bg-green-700"
+                                        onClick={handleSync} 
                                         disabled={isLoading}
+                                        className="flex-1 bg-green-600 text-white py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-green-700 disabled:opacity-50"
                                     >
-                                        <ExternalLink size={14}/> إنشاء جديد
+                                        <Upload size={16}/> رفع (حفظ)
                                     </button>
                                     <button 
-                                        onClick={handleManualRestore} 
-                                        className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1 hover:bg-blue-700"
-                                        disabled={isLoading || !spreadsheetId}
+                                        onClick={handleFetch} 
+                                        disabled={isLoading}
+                                        className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-blue-700 disabled:opacity-50"
                                     >
-                                        <RefreshCcw size={14} className={isLoading ? 'animate-spin' : ''}/> جلب (Restore)
+                                        <RefreshCcw size={16} className={isLoading ? 'animate-spin' : ''}/> جلب (استرجاع)
                                     </button>
                                 </div>
-                                <div className={`flex items-center justify-between p-2 rounded border mt-2 ${isAutoSync ? 'bg-green-50 border-green-200' : 'bg-gray-50'}`}>
-                                    <span className="text-xs font-bold text-gray-700">حفظ تلقائي (Auto Save)</span>
-                                    <button onClick={toggleAutoSync} className={`w-8 h-4 rounded-full p-0.5 transition-colors flex ${isAutoSync ? 'bg-green-500 justify-end' : 'bg-gray-300 justify-start'}`}>
-                                        <div className="w-3 h-3 bg-white rounded-full"></div>
-                                    </button>
+
+                                <div className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${isAutoSync ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`} onClick={toggleAutoSync}>
+                                    <span className="text-sm font-bold text-gray-700">حفظ تلقائي (Auto Save)</span>
+                                    <div className={`w-10 h-5 rounded-full p-0.5 transition-colors flex ${isAutoSync ? 'bg-green-500 justify-end' : 'bg-gray-300 justify-start'}`}>
+                                        <div className="w-4 h-4 bg-white rounded-full shadow-sm"></div>
+                                    </div>
                                 </div>
+                                
+                                <button onClick={() => { setScriptUrl(''); onConnectionChange(false); localStorage.removeItem('mufattish_script_url'); }} className="text-xs text-red-400 hover:text-red-600 underline w-full text-center">
+                                    فصل الحساب / تغيير الرابط
+                                </button>
                             </div>
                         )}
                     </div>
@@ -377,7 +300,7 @@ const DatabaseManager: React.FC<DatabaseManagerProps> = ({
                     
                     <div className="p-6">
                         <p className="text-sm text-gray-500 mb-6 min-h-[40px]">
-                            حفظ ملف كامل على جهازك يحتوي على كل البيانات والإعدادات. الطريقة الأسهل والأسرع لنقل العمل.
+                            حفظ ملف كامل على جهازك يحتوي على كل البيانات والإعدادات (بما في ذلك الرابط). استخدم هذا الملف لنقل إعداداتك لجهاز آخر بأمان.
                         </p>
 
                         <div className="space-y-4">
@@ -402,7 +325,7 @@ const DatabaseManager: React.FC<DatabaseManagerProps> = ({
                                     className="w-full bg-white border-2 border-purple-100 text-purple-700 py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-purple-50 transition-colors"
                                 >
                                     <Upload size={20} />
-                                    استرجاع نسخة (Restore)
+                                    استرجاع / دمج نسخة
                                 </button>
                             </div>
                         </div>
@@ -417,15 +340,6 @@ const DatabaseManager: React.FC<DatabaseManagerProps> = ({
                     {status === 'success' ? <CheckCircle2 size={24} className="shrink-0 mt-1" /> : <AlertCircle size={24} className="shrink-0 mt-1" />}
                     <div className="flex-1">
                         <p className="font-bold">{message}</p>
-                        {isOriginError && status === 'error' && (
-                             <div className="mt-2 text-sm bg-white/50 p-2 rounded border border-red-200">
-                                 <p className="font-bold flex items-center gap-1"><AlertTriangle size={14}/> تلميح:</p>
-                                 <p>تأكد من إضافة الرابط في Google Console.</p>
-                             </div>
-                        )}
-                        {status === 'success' && spreadsheetId && isConnected && (
-                            <a href={`https://docs.google.com/spreadsheets/d/${spreadsheetId}`} target="_blank" rel="noreferrer" className="text-xs underline mt-1 block hover:text-green-900">فتح الملف</a>
-                        )}
                     </div>
                 </div>
             )}

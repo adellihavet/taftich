@@ -13,13 +13,17 @@ import DatabaseManager from './components/DatabaseManager';
 import DashboardStats from './components/DashboardStats';
 import PromotionList from './components/PromotionList';
 import TeacherDrawer from './components/TeacherDrawer';
+import AcqManager from './components/Acquisitions/AcqManager';
+import AcqSidebar from './components/Acquisitions/AcqSidebar';
 import Auth from './components/Auth';
-import { supabase, isSupabaseConfigured } from './services/supabaseService';
+import { supabase, isSupabaseConfigured, fetchScriptUrlFromCloud } from './services/supabaseService';
 import { Teacher, ReportData, TenureReportData, QuarterlyReportData, AppView } from './types';
+import { AcqFilterState } from './types/acquisitions';
 import { MOCK_TEACHERS, INITIAL_REPORT_STATE, INITIAL_TENURE_REPORT_STATE, INITIAL_QUARTERLY_REPORT_STATE } from './constants';
-import { Database, Crown, LayoutDashboard, ArrowUpCircle, PenLine, LogOut, HardDrive, UserCircle2, Hexagon, PieChart, Cloud, RefreshCcw, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { initializeGoogleApi, trySilentAuth, clearAndOverwriteSheet } from './services/sheetsService';
+import { Database, LayoutDashboard, ArrowUpCircle, PenLine, LogOut, UserCircle2, Hexagon, PieChart, Cloud, RefreshCcw, AlertCircle, BarChart2 } from 'lucide-react';
+import { syncWithScript } from './services/sheetsService';
 import { generateDatabaseRows } from './utils/sheetHelper';
+import { getAcqDB } from './services/acqStorage';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
@@ -47,6 +51,17 @@ const App: React.FC = () => {
   const [isGoldMember, setIsGoldMember] = useState<boolean>(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState<boolean>(false);
 
+  // --- ACQUISITION FILTER STATE ---
+  const [acqFilters, setAcqFilters] = useState<AcqFilterState>({
+      scope: 'district',
+      selectedSchool: '',
+      selectedLevel: '',
+      selectedClass: '',
+      selectedSubject: ''
+  });
+  
+  const [acqRefreshKey, setAcqRefreshKey] = useState(0); 
+
   // --- GOOGLE SYNC STATE ---
   const [isGoogleConnected, setIsGoogleConnected] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
@@ -62,6 +77,13 @@ const App: React.FC = () => {
       Object.values(reportsMap).forEach(r => { if(r.school) schools.add(r.school.trim()); });
       return Array.from(schools).sort();
   }, [reportsMap]);
+
+  const acqAvailableSchools = useMemo(() => {
+      const db = getAcqDB();
+      const schools = new Set<string>();
+      db.records.forEach(r => schools.add(r.schoolName));
+      return Array.from(schools).sort();
+  }, [acqRefreshKey, view]); 
 
   const availableLevels = useMemo(() => {
       const levels = new Set<string>();
@@ -84,6 +106,18 @@ const App: React.FC = () => {
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session);
             setLoadingSession(false);
+            
+            if (session?.user) {
+                // Ensure function exists before calling
+                if (typeof fetchScriptUrlFromCloud === 'function') {
+                    fetchScriptUrlFromCloud().then(url => {
+                        if (url) {
+                            localStorage.setItem('mufattish_script_url', url);
+                            setIsGoogleConnected(true);
+                        }
+                    });
+                }
+            }
         }).catch((err: any) => {
             console.error("Session check failed:", err);
             setLoadingSession(false);
@@ -92,6 +126,17 @@ const App: React.FC = () => {
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
             setSession(session);
             setLoadingSession(false);
+            
+            if (session?.user) {
+                if (typeof fetchScriptUrlFromCloud === 'function') {
+                    fetchScriptUrlFromCloud().then(url => {
+                        if (url) {
+                            localStorage.setItem('mufattish_script_url', url);
+                            setIsGoogleConnected(true);
+                        }
+                    });
+                }
+            }
         });
 
         return () => subscription.unsubscribe();
@@ -118,15 +163,9 @@ const App: React.FC = () => {
     if (savedInspectorName) setInspectorName(savedInspectorName);
     if (savedSignature) setSignature(savedSignature);
 
-    // Initialize Google API if keys exist
-    const apiKey = localStorage.getItem('mufattish_sheets_api_key');
-    const clientId = localStorage.getItem('mufattish_client_id');
-    if (apiKey && clientId) {
-        initializeGoogleApi(apiKey, clientId).then(() => {
-            trySilentAuth().then(success => {
-                if (success) setIsGoogleConnected(true);
-            });
-        }).catch(err => console.error("Google Init Error:", err));
+    const scriptUrl = localStorage.getItem('mufattish_script_url');
+    if (scriptUrl) {
+        setIsGoogleConnected(true);
     }
   }, []);
 
@@ -138,9 +177,8 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('mufattish_is_gold', isGoldMember.toString()); }, [isGoldMember]);
   useEffect(() => { localStorage.setItem('mufattish_inspector_name', inspectorName); }, [inspectorName]);
 
-  // --- GOOGLE SYNC LOGIC (MOVED FROM DATABASE MANAGER) ---
+  // --- GOOGLE SYNC LOGIC ---
   useEffect(() => {
-      // Skip initial render to avoid syncing empty state or immediate sync on load
       if (isFirstMount.current) {
           isFirstMount.current = false;
           return;
@@ -148,15 +186,15 @@ const App: React.FC = () => {
 
       if (!autoSyncEnabled || !isGoogleConnected) return;
 
-      const sheetId = localStorage.getItem('mufattish_sheet_id');
-      if (!sheetId) return;
+      const scriptUrl = localStorage.getItem('mufattish_script_url');
+      if (!scriptUrl) return;
 
       setSyncStatus('syncing');
       
       const timer = setTimeout(async () => {
           try {
               const data = generateDatabaseRows(teachers, currentReport, reportsMap);
-              await clearAndOverwriteSheet(sheetId, data);
+              await syncWithScript(scriptUrl, data);
               setSyncStatus('success');
               setSyncMessage('تم الحفظ في Google Sheets');
               setTimeout(() => setSyncStatus('idle'), 3000);
@@ -165,10 +203,10 @@ const App: React.FC = () => {
               setSyncStatus('error');
               setSyncMessage('فشل المزامنة');
           }
-      }, 4000); // 4 seconds debounce
+      }, 4000);
 
       return () => clearTimeout(timer);
-  }, [teachers, reportsMap, tenureReportsMap, autoSyncEnabled, isGoogleConnected]); // Dependencies for sync
+  }, [teachers, reportsMap, tenureReportsMap, autoSyncEnabled, isGoogleConnected]);
 
   const handleSelectTeacher = (teacher: Teacher) => {
     setPreviewTeacher(teacher);
@@ -377,7 +415,6 @@ const App: React.FC = () => {
   const userFullName = session.user?.user_metadata?.full_name || session.user?.email?.split('@')[0] || 'مستخدم';
 
   return (
-    // DARK GRADIENT BACKGROUND
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 text-gray-900 font-sans p-3 lg:p-4 overflow-hidden h-screen">
       <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} onUpgrade={() => {setIsGoldMember(true); setShowUpgradeModal(false); alert("مبروك! تم تفعيل العضوية الذهبية بنجاح.");}} />
       <TeacherDrawer 
@@ -399,9 +436,7 @@ const App: React.FC = () => {
       </div>
 
       <div className="flex h-full gap-4 print:hidden">
-        {/* SIDEBAR: FLOATING PANEL */}
         <aside className="w-96 bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl flex flex-col border border-white/20 overflow-hidden transition-all hover:shadow-blue-900/20 duration-500 shrink-0">
-          {/* Header Gradient */}
           <div className="p-6 bg-gradient-to-br from-blue-700 to-indigo-800 text-white relative overflow-hidden shrink-0">
             <div className="relative z-10">
                 <div className="flex justify-between items-center mb-6">
@@ -411,14 +446,14 @@ const App: React.FC = () => {
                      </div>
                 </div>
 
-                <div className="flex gap-2 mb-4 bg-white/10 p-1.5 rounded-xl backdrop-blur-sm border border-white/10">
-                    <button onClick={() => setView(AppView.DASHBOARD)} className={`flex-1 p-2 rounded-lg transition-all flex justify-center items-center ${view === AppView.DASHBOARD ? 'bg-white text-blue-800 shadow-sm' : 'hover:bg-white/10 text-blue-100'}`} title="الرئيسية"><LayoutDashboard size={18} /></button>
-                    <button onClick={() => setView(AppView.DATABASE)} className={`flex-1 p-2 rounded-lg transition-all flex justify-center items-center ${view === AppView.DATABASE ? 'bg-white text-blue-800 shadow-sm' : 'hover:bg-white/10 text-blue-100'}`} title="قاعدة البيانات"><Database size={18} /></button>
-                    <button onClick={() => setView(AppView.PROMOTIONS)} className={`flex-1 p-2 rounded-lg transition-all flex justify-center items-center ${view === AppView.PROMOTIONS ? 'bg-white text-blue-800 shadow-sm' : 'hover:bg-white/10 text-blue-100'}`} title="المعنيون بالترقية"><ArrowUpCircle size={18} /></button>
-                    <button onClick={handleOpenQuarterlyReport} className={`flex-1 p-2 rounded-lg transition-all flex justify-center items-center ${view === AppView.QUARTERLY_REPORT ? 'bg-white text-blue-800 shadow-sm' : 'hover:bg-white/10 text-blue-100'}`} title="الحصيلة الفصلية"><PieChart size={18} /></button>
+                <div className="flex gap-2 mb-4 bg-white/10 p-1.5 rounded-xl backdrop-blur-sm border border-white/10 overflow-x-auto no-scrollbar">
+                    <button onClick={() => setView(AppView.DASHBOARD)} className={`flex-1 min-w-[40px] p-2 rounded-lg transition-all flex justify-center items-center ${view === AppView.DASHBOARD ? 'bg-white text-blue-800 shadow-sm' : 'hover:bg-white/10 text-blue-100'}`} title="الرئيسية"><LayoutDashboard size={18} /></button>
+                    <button onClick={() => setView(AppView.ACQUISITIONS)} className={`flex-1 min-w-[40px] p-2 rounded-lg transition-all flex justify-center items-center ${view === AppView.ACQUISITIONS ? 'bg-white text-blue-800 shadow-sm' : 'hover:bg-white/10 text-blue-100'}`} title="تقييم المكتسبات"><BarChart2 size={18} /></button>
+                    <button onClick={() => setView(AppView.DATABASE)} className={`flex-1 min-w-[40px] p-2 rounded-lg transition-all flex justify-center items-center ${view === AppView.DATABASE ? 'bg-white text-blue-800 shadow-sm' : 'hover:bg-white/10 text-blue-100'}`} title="قاعدة البيانات"><Database size={18} /></button>
+                    <button onClick={() => setView(AppView.PROMOTIONS)} className={`flex-1 min-w-[40px] p-2 rounded-lg transition-all flex justify-center items-center ${view === AppView.PROMOTIONS ? 'bg-white text-blue-800 shadow-sm' : 'hover:bg-white/10 text-blue-100'}`} title="المعنيون بالترقية"><ArrowUpCircle size={18} /></button>
+                    <button onClick={handleOpenQuarterlyReport} className={`flex-1 min-w-[40px] p-2 rounded-lg transition-all flex justify-center items-center ${view === AppView.QUARTERLY_REPORT ? 'bg-white text-blue-800 shadow-sm' : 'hover:bg-white/10 text-blue-100'}`} title="الحصيلة الفصلية"><PieChart size={18} /></button>
                 </div>
 
-                {/* --- SYNC STATUS INDICATOR --- */}
                 {isGoogleConnected && (
                     <div className={`mb-4 px-3 py-2 rounded-xl flex items-center justify-between backdrop-blur-md border transition-all duration-300 ${syncStatus === 'error' ? 'bg-red-500/20 border-red-400/30' : 'bg-white/10 border-white/10'}`}>
                         <div className="flex items-center gap-2">
@@ -431,7 +466,7 @@ const App: React.FC = () => {
                                  'تمت المزامنة'}
                             </span>
                         </div>
-                        <div className={`w-2 h-2 rounded-full ${syncStatus === 'error' ? 'bg-red-500' : 'bg-green-400'} animate-pulse`}></div>
+                        <div className={`w-2 h-2 rounded-full ${syncStatus === 'error' ? 'bg-red-50' : 'bg-green-400'} animate-pulse`}></div>
                     </div>
                 )}
 
@@ -460,7 +495,6 @@ const App: React.FC = () => {
                     </div>
                 </div>
             </div>
-            {/* Background Decoration */}
             <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-blue-500 rounded-full blur-3xl opacity-30"></div>
             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500 rounded-full blur-3xl opacity-20"></div>
           </div>
@@ -479,6 +513,13 @@ const App: React.FC = () => {
                     availableSchools={availableSchools} availableLevels={availableLevels}
                     filterSchool={filterSchool} filterLevel={filterLevel}
                     onSetFilterSchool={setFilterSchool} onSetFilterLevel={setFilterLevel}
+                />
+            ) : view === AppView.ACQUISITIONS ? (
+                <AcqSidebar 
+                    records={getAcqDB().records} 
+                    availableSchools={acqAvailableSchools}
+                    filters={acqFilters}
+                    onUpdateFilters={(updates) => setAcqFilters(prev => ({...prev, ...updates}))}
                 />
             ) : view === AppView.QUARTERLY_REPORT ? (
                  <div className="h-full flex flex-col items-center justify-center text-slate-400 p-6 text-center animate-in fade-in zoom-in-95">
@@ -529,7 +570,6 @@ const App: React.FC = () => {
           </div>
         </aside>
 
-        {/* MAIN CONTENT: FLOATING PANEL */}
         <main className="flex-1 bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl flex flex-col relative overflow-hidden border border-white/20 min-w-0">
             {view === AppView.DASHBOARD && (
                 <DashboardStats teachers={filteredTeachers} reportsMap={reportsMap} onNavigateToPromotions={() => setView(AppView.PROMOTIONS)} fullTeacherCount={teachers.length} selectedSchool={filterSchool} />
@@ -541,13 +581,21 @@ const App: React.FC = () => {
                     tenureReportsMap={tenureReportsMap}
                     onRestore={handleRestoreBackup}
                     currentReport={currentReport}
-                    // Pass connection control down to manager
                     onConnectionChange={setIsGoogleConnected}
                     isConnected={isGoogleConnected}
                     onAutoSyncChange={setAutoSyncEnabled}
                     isAutoSync={autoSyncEnabled}
                 />
             )}
+            
+            {view === AppView.ACQUISITIONS && (
+                <AcqManager 
+                    availableSchools={acqAvailableSchools} 
+                    onDataUpdated={() => setAcqRefreshKey(prev => prev + 1)}
+                    externalFilters={acqFilters} 
+                />
+            )}
+
             {view === AppView.PROMOTIONS && (
                 <PromotionList teachers={filteredTeachers} reportsMap={reportsMap} />
             )}

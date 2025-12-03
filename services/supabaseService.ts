@@ -50,3 +50,30 @@ export const supabase = initSupabase();
 export const isSupabaseConfigured = (): boolean => {
     return !!supabase;
 };
+
+// Fetch script URL from user metadata
+export const fetchScriptUrlFromCloud = async (): Promise<string | null> => {
+    if (!supabase) return null;
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.user_metadata?.script_url) {
+            return user.user_metadata.script_url;
+        }
+        return null;
+    } catch (e) {
+        console.error("Failed to fetch script URL", e);
+        return null;
+    }
+};
+
+// Save script URL to user metadata
+export const saveScriptUrlToCloud = async (url: string) => {
+    if (!supabase) return;
+    try {
+        await supabase.auth.updateUser({
+            data: { script_url: url }
+        });
+    } catch (e) {
+        console.error("Failed to save script URL", e);
+    }
+};

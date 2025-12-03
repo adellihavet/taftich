@@ -1,126 +1,243 @@
 
 import { Teacher, ReportData, ObservationItem, LegacyReportOptions } from '../types';
 import { DEFAULT_OBSERVATION_TEMPLATE, INITIAL_REPORT_STATE } from '../constants';
+import { MODERN_RANKS, MODERN_DEGREES } from '../modernConstants';
+
+declare const XLSX: any;
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-/**
- * Helper to convert various date formats to standard YYYY-MM-DD for HTML5 inputs
- */
 const normalizeDate = (val: any): string => {
     if (!val) return '';
-    const str = String(val).trim();
-    
-    // 1. Handle Excel Serial Numbers (e.g. 44562) which Google Sheets sometimes returns for dates
-    if (/^\d+$/.test(str) && Number(str) > 20000) { 
-        // 25569 is the offset between Excel (1900) and JS (1970) epochs
-        const date = new Date(Math.round((Number(str) - 25569) * 86400 * 1000));
+    if (typeof val === 'number' && val > 20000) {
+        const date = new Date(Math.round((val - 25569) * 86400 * 1000));
         if (!isNaN(date.getTime())) {
             return date.toISOString().split('T')[0];
         }
     }
-
-    // 2. Handle DD/MM/YYYY (Common in Arab/French regions)
-    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) {
-        const [d, m, y] = str.split('/');
-        return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    const str = String(val).trim();
+    // Try DD/MM/YYYY
+    const parts = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+    if (parts) {
+        const d = parts[1].padStart(2, '0');
+        const m = parts[2].padStart(2, '0');
+        let y = parts[3];
+        if (y.length === 2) y = '20' + y; 
+        return `${y}-${m}-${d}`;
     }
+    // Already YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+         return str;
+    }
+    return str; 
+};
+
+export const generateSchoolTemplate = () => {
+    // --- 1. PREPARE DATA LISTS ---
+    const ranks = MODERN_RANKS;
+    const degrees = MODERN_DEGREES; 
+    const status = ["مرسم", "متعاقد", "متربص"];
+    const echelons = Array.from({length: 12}, (_, i) => (i + 1).toString()); 
+    const levels = ["التربية التحضيرية", "السنة الأولى", "السنة الثانية", "السنة الثالثة", "السنة الرابعة", "السنة الخامسة"];
+
+    const maxLength = Math.max(ranks.length, degrees.length, status.length, echelons.length, levels.length);
     
-    // 3. Handle YYYY/MM/DD
-    if (/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(str)) {
-         return str.replace(/\//g, '-');
+    // Create Columns for the Hidden Sheet
+    const dataSheetRows = [["قائمة_الرتب", "قائمة_الشهادات", "قائمة_الوضعية", "قائمة_الدرجات", "قائمة_المستويات"]];
+    
+    for (let i = 0; i < maxLength; i++) {
+        dataSheetRows.push([
+            ranks[i] || "",
+            degrees[i] || "",
+            status[i] || "",
+            echelons[i] || "",
+            levels[i] || ""
+        ]);
     }
 
-    // 4. Return as is (Assumes YYYY-MM-DD)
-    return str;
+    // --- 2. CREATE WORKBOOK ---
+    const wb = XLSX.utils.book_new();
+    wb.Workbook = { Views: [{ RTL: true }] };
+
+    // --- 3. CREATE DATA SHEET (HIDDEN) FIRST ---
+    // Critical: Creating this first ensures Dropdowns work reliably in some Excel versions
+    const wsData = XLSX.utils.aoa_to_sheet(dataSheetRows);
+    XLSX.utils.book_append_sheet(wb, wsData, "Lists");
+
+    // --- 4. CREATE MAIN SHEET ---
+    const headers = [
+        "اللقب والاسم",       // A
+        "تاريخ الميلاد",      // B
+        "مكان الميلاد",       // C
+        "الشهادة",            // D
+        "تاريخ الشهادة",      // E
+        "تاريخ التوظيف",      // F
+        "الرتبة",             // G
+        "تاريخ التعيين في الرتبة", // H
+        "الدرجة",             // I
+        "تاريخ الدرجة",       // J
+        "الوضعية",            // K
+        "آخر نقطة تفتيش",     // L
+        "تاريخ آخر تفتيش",    // M
+        "المدرسة الحالية",    // N
+        "المستوى المسند"      // O
+    ];
+
+    const wsMain = XLSX.utils.aoa_to_sheet([headers]);
+
+    // RTL View
+    if(!wsMain['!views']) wsMain['!views'] = [];
+    wsMain['!views'].push({ rightToLeft: true });
+
+    // Column Widths
+    wsMain['!cols'] = [
+        { wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 25 }, { wch: 15 },
+        { wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 10 }, { wch: 15 },
+        { wch: 15 }, { wch: 10 }, { wch: 15 }, { wch: 25 }, { wch: 20 }
+    ];
+
+    // Data Validation
+    const rangeLimit = 200; 
+
+    wsMain['!dataValidation'] = [
+        { sqref: `D2:D${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$B$2:$B$${degrees.length + 1}`, showDropDown: true },
+        { sqref: `G2:G${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$A$2:$A$${ranks.length + 1}`, showDropDown: true },
+        { sqref: `I2:I${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$D$2:$D$${echelons.length + 1}`, showDropDown: true },
+        { sqref: `K2:K${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$C$2:$C$${status.length + 1}`, showDropDown: true },
+        { sqref: `O2:O${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$E$2:$E$${levels.length + 1}`, showDropDown: true }
+    ];
+
+    // Format Date Columns as Text to prevent Excel auto-formatting issues
+    const dateCols = [1, 4, 5, 7, 9, 12]; 
+    for(let R = 1; R < rangeLimit; ++R) {
+        dateCols.forEach(C => {
+            const cellRef = XLSX.utils.encode_cell({c: C, r: R});
+            if(!wsMain[cellRef]) wsMain[cellRef] = { t: 's', v: '' }; 
+        });
+    }
+
+    XLSX.utils.book_append_sheet(wb, wsMain, "معلومات_الأساتذة");
+
+    return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
 };
 
-/**
- * Helper to map Arabic or various status text to internal codes
- */
-const normalizeStatus = (val: any): 'titulaire' | 'contractuel' | 'stagiere' => {
-    const s = String(val).trim().toLowerCase();
-    if (s.includes('متعاقد') || s.includes('contract')) return 'contractuel';
-    if (s.includes('متربص') || s.includes('stag')) return 'stagiere';
-    // Default to titulaire (مرسم) if unclear or matches 'titulaire'/'مرسم'
-    return 'titulaire';
+export const parseSchoolExcel = (data: ArrayBuffer): Teacher[] => {
+    const workbook = XLSX.read(data, { type: 'array' });
+    
+    // Stable Logic: Look for "معلومات_الأساتذة", if not found, take the SECOND sheet (index 1) because Index 0 is "Lists"
+    let targetSheetName = "معلومات_الأساتذة";
+    if (!workbook.SheetNames.includes(targetSheetName)) {
+        if (workbook.SheetNames.length > 1) {
+            targetSheetName = workbook.SheetNames[1]; // Assume Index 1 is data, Index 0 is lists
+        } else {
+            targetSheetName = workbook.SheetNames[0]; // Fallback
+        }
+    }
+
+    const worksheet = workbook.Sheets[targetSheetName];
+    const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true }); // raw: true to handle dates better
+    
+    if (!rows || rows.length < 2) return [];
+
+    const teachers: Teacher[] = [];
+
+    // Skip header row (index 0)
+    for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0 || !row[0]) continue;
+
+        // Determine Status
+        const rawStatus = String(row[10] || '').trim();
+        let status: 'titulaire' | 'contractuel' | 'stagiere' = 'titulaire';
+        if (rawStatus.includes('متعاقد')) status = 'contractuel';
+        else if (rawStatus.includes('متربص')) status = 'stagiere';
+
+        const teacher: Teacher = {
+            id: generateId(),
+            fullName: String(row[0]).trim(),
+            birthDate: normalizeDate(row[1]),
+            birthPlace: String(row[2] || '').trim(),
+            degree: String(row[3] || '').trim(),
+            degreeDate: normalizeDate(row[4]),
+            recruitmentDate: normalizeDate(row[5]),
+            rank: String(row[6] || '').trim(),
+            currentRankDate: normalizeDate(row[7]),
+            echelon: String(row[8] || '').trim(),
+            echelonDate: normalizeDate(row[9]),
+            status: status,
+            lastMark: parseFloat(row[11]) || 10,
+            lastInspectionDate: normalizeDate(row[12]),
+            tenureDate: '' 
+        };
+        
+        if (teacher.fullName && teacher.fullName.length > 2) {
+            teachers.push(teacher);
+        }
+    }
+
+    return teachers;
 };
 
-/**
- * Generates a 2D array (Rows x Columns) representing the database.
- * This format is directly accepted by the Google Sheets API.
- */
+// ... (Rest of the file: generateDatabaseRows, parseDatabaseRows, etc. keep as is)
 export const generateDatabaseRows = (
     teachers: Teacher[], 
     currentReport?: ReportData,
     reportsMap?: Record<string, ReportData>
 ): (string | number)[][] => {
-    // 1. Build Headers
-    // Existing Headers (Indices 0-14) including New Tenure Date
     const basicHeaders = [
         'ID', 'الاسم_واللقب', 'تاريخ_الميلاد', 'مكان_الميلاد', 'الشهادة', 'تاريخ_الشهادة',
         'تاريخ_التوظيف', 'الرتبة', 'تاريخ_الرتبة', 'الدرجة', 'تاريخ_الدرجة',
         'تاريخ_آخر_تفتيش', 'النقطة_السابقة', 'الوضعية', 'تاريخ_التثبيت'
     ];
 
-    // Report Headers (Indices 15-29)
     const reportHeaders = [
         'الولاية', 'المقاطعة', 'المدرسة', 
         'تاريخ_الزيارة', 'المادة', 'الموضوع', 'المدة', 'المستوى', 'الفوج', 
         'عدد_التلاميذ', 'الغائبون', 'السبورة', 'العلامة_النهائية', 'العلامة_بالحروف', 'توجيهات_التقييم'
     ];
 
-    // Legacy & Meta Headers (Indices 30-65)
     const legacyHeaders = [
-        'نوع_التقرير', // Index 30
-        'اسم_المفتش',  // Index 31
-        'الحالة_العائلية', 'معهد_التكوين', 'تاريخ_التخرج_من_المعهد', 'تاريخ_المؤهل_العلمي', // Personal extras
-        'السنة_الدراسية', 'الدائرة', 'البلدية', // Admin extras
-        'القاعة_استماع', 'الإضاءة', 'التدفئة', 'التهوية', 'النظافة', // Environment
-        'إعداد_الدروس', 'قيمة_الإعداد', 'وسائل_أخرى', 'السبورة', 'التوزيع_والمعلقات', // Prep
-        'السجلات', 'السجلات_مستعملة', 'السجلات_مراقبة', // Registers
-        
-        // New Fields matching the document strict structure
+        'نوع_التقرير', 
+        'اسم_المفتش',
+        'الحالة_العائلية', 'معهد_التكوين', 'تاريخ_التخرج_من_المعهد', 'تاريخ_المؤهل_العلمي', 
+        'السنة_الدراسية', 'الدائرة', 'البلدية',
+        'القاعة_استماع', 'الإضاءة', 'التدفئة', 'التهوية', 'النظافة', 
+        'إعداد_الدروس', 'قيمة_الإعداد', 'وسائل_أخرى', 'السبورة', 'التوزيع_والمعلقات', 
+        'السجلات', 'السجلات_مستعملة', 'السجلات_مراقبة', 
         'البرامج_المقررة', 'التدرج', 'الواجبات',
-
-        'تسلسل_الدروس', 'قيمة_المعلومات', 'تحقق_الأهداف', 'مشاركة_التلاميذ', // Execution
-        'التطبيقات', 'ملاءمة_التطبيقات', // Apps
-        'العناية_بالدفاتر', 'مراقبة_الدفاتر', 'تصحيح_الواجبات', 'قيمة_التصحيح', // Notebooks
-        'التقدير_العام_الكلاسيكي' // Index 65
+        'تسلسل_الدروس', 'قيمة_المعلومات', 'تحقق_الأهداف', 'مشاركة_التلاميذ', 
+        'التطبيقات', 'ملاءمة_التطبيقات', 
+        'العناية_بالدفاتر', 'مراقبة_الدفاتر', 'تصحيح_الواجبات', 'قيمة_التصحيح', 
+        'التقدير_العام_الكلاسيكي'
     ];
 
-    // Dynamic Observation Headers (Indices 66+)
     const obsHeaders: string[] = [];
     DEFAULT_OBSERVATION_TEMPLATE.forEach(obs => {
-        obsHeaders.push(`معيار_${obs.id}_التقييم`); // Score
-        obsHeaders.push(`معيار_${obs.id}_ملاحظات`); // Note
+        obsHeaders.push(`معيار_${obs.id}_التقييم`); 
+        obsHeaders.push(`معيار_${obs.id}_ملاحظات`); 
     });
 
     const allHeaders = [...basicHeaders, ...reportHeaders, ...legacyHeaders, ...obsHeaders];
 
-    // 2. Build Rows
     const rows = teachers.map(t => {
-        // Determine which report data to use for this teacher
+        if(!t) return []; 
         let r: ReportData = INITIAL_REPORT_STATE;
         let hasReport = false;
 
         if (currentReport && currentReport.teacherId === t.id) {
-            // Priority: The one currently being edited in the UI
             r = currentReport;
             hasReport = true;
         } else if (reportsMap && reportsMap[t.id]) {
-            // Secondary: The one stored in the local Map
             r = reportsMap[t.id];
             hasReport = true;
         }
 
-        // Ensure legacyData object exists even if empty
         const ld = r.legacyData || INITIAL_REPORT_STATE.legacyData!;
 
         const basicData = [
-            t.id, t.fullName, t.birthDate, t.birthPlace, t.degree, t.degreeDate || '',
-            t.recruitmentDate, t.rank, t.currentRankDate || '', t.echelon || '', t.echelonDate || '',
-            t.lastInspectionDate, t.lastMark, t.status, t.tenureDate || '' // Added tenureDate at index 14
+            t.id || '', t.fullName || '', t.birthDate || '', t.birthPlace || '', t.degree || '', t.degreeDate || '',
+            t.recruitmentDate || '', t.rank || '', t.currentRankDate || '', t.echelon || '', t.echelonDate || '',
+            t.lastInspectionDate || '', t.lastMark || '', t.status || '', t.tenureDate || ''
         ];
 
         const reportData = [
@@ -164,12 +281,9 @@ export const generateDatabaseRows = (
             hasReport ? ld.registers : '',
             hasReport ? ld.registersUsed : '',
             hasReport ? ld.registersMonitored : '',
-            
-            // New Fields
             hasReport ? ld.scheduledPrograms : '',
             hasReport ? ld.progression : '',
             hasReport ? ld.duties : '',
-
             hasReport ? ld.lessonExecution : '',
             hasReport ? ld.informationValue : '',
             hasReport ? ld.objectivesAchieved : '',
@@ -185,11 +299,10 @@ export const generateDatabaseRows = (
 
         const obsData: (string | number)[] = [];
         DEFAULT_OBSERVATION_TEMPLATE.forEach(tmpl => {
-            if (hasReport) {
+            if (hasReport && r.observations) {
                 const found = r.observations.find(o => o.id === tmpl.id);
                 const score = (found?.score != null) ? found.score : '';
                 const note = found?.improvementNotes || '';
-                
                 obsData.push(score);
                 obsData.push(note);
             } else {
@@ -204,23 +317,12 @@ export const generateDatabaseRows = (
     return [allHeaders, ...rows];
 };
 
-/**
- * Parses the 2D array from Google Sheets back into App Data.
- */
 export const parseDatabaseRows = (values: any[][]): { teachers: Teacher[], reportsMap: Record<string, ReportData> } => {
     if (!values || values.length < 2) return { teachers: [], reportsMap: {} };
 
-    // Row 0 is headers, start from 1
     const headerRow = values[0];
-    
-    // Check if this sheet has the new 'tenureDate' column (check header 14 or 15)
-    // Old format: Index 14 was 'الولاية'
-    // New format: Index 14 is 'تاريخ_التثبيت'
     const isLatestSchema = headerRow[14] && String(headerRow[14]).includes('تثبيت');
-    
-    // Offset for reading report data
     const offset = isLatestSchema ? 1 : 0;
-
     const isNewFormat = headerRow[29 + offset] && (String(headerRow[29 + offset]).includes('نوع_التقرير') || String(headerRow[29 + offset]).includes('Legacy'));
     const isLatestLegacyFormat = isNewFormat && (String(headerRow[51 + offset]).includes('البرامج') || String(headerRow[51 + offset]).includes('scheduled'));
 
@@ -231,7 +333,6 @@ export const parseDatabaseRows = (values: any[][]): { teachers: Teacher[], repor
         const row = values[i];
         if (!row || row.length === 0) continue;
 
-        // Helper to safely get value at index
         const getVal = (idx: number): string => {
             const val = row[idx];
             if (val === undefined || val === null) return '';
@@ -239,8 +340,7 @@ export const parseDatabaseRows = (values: any[][]): { teachers: Teacher[], repor
             return String(val).trim();
         };
 
-        // Basic Validation
-        if (!getVal(1)) continue; // No name
+        if (!getVal(1)) continue;
 
         const id = getVal(0) || generateId();
         
@@ -258,19 +358,16 @@ export const parseDatabaseRows = (values: any[][]): { teachers: Teacher[], repor
             echelonDate: normalizeDate(getVal(10)),
             lastInspectionDate: normalizeDate(getVal(11)),
             lastMark: parseFloat(getVal(12)) || 10,
-            status: normalizeStatus(getVal(13)),
-            tenureDate: isLatestSchema ? normalizeDate(getVal(14)) : '' // Read new field
+            status: normalizeStatus(getVal(13)) as 'titulaire' | 'contractuel' | 'stagiere',
+            tenureDate: isLatestSchema ? normalizeDate(getVal(14)) : ''
         };
         teachers.push(teacher);
 
-        // Reconstruct Report Data
-        // Adjusted indices based on offset
         const hasReportData = getVal(14 + offset) || getVal(18 + offset); 
 
         if (hasReportData) { 
-            
             let legacyData: LegacyReportOptions;
-            let obsStartIndex = 65 + offset; // Default for Latest
+            let obsStartIndex = 65 + offset;
 
             if (isLatestLegacyFormat) {
                 legacyData = {
@@ -294,11 +391,9 @@ export const parseDatabaseRows = (values: any[][]): { teachers: Teacher[], repor
                     registers: getVal(48 + offset),
                     registersUsed: getVal(49 + offset),
                     registersMonitored: getVal(50 + offset),
-                    
                     scheduledPrograms: getVal(51 + offset),
                     progression: getVal(52 + offset),
                     duties: getVal(53 + offset),
-
                     lessonExecution: getVal(54 + offset),
                     informationValue: getVal(55 + offset),
                     objectivesAchieved: getVal(56 + offset),
@@ -313,13 +408,11 @@ export const parseDatabaseRows = (values: any[][]): { teachers: Teacher[], repor
                 };
                 obsStartIndex = 65 + offset;
             } else if (isNewFormat) {
-                // Previous logic for mid-version (rare case now but safe to keep logic similar)
-                // Simplified fallback:
                 legacyData = { ...INITIAL_REPORT_STATE.legacyData! };
                 obsStartIndex = 62 + offset;
             } else {
                 legacyData = { ...INITIAL_REPORT_STATE.legacyData! }; 
-                obsStartIndex = 29; // Very old format didn't have tenureDate so offset is 0 here anyway
+                obsStartIndex = 29;
             }
 
             const observations = JSON.parse(JSON.stringify(DEFAULT_OBSERVATION_TEMPLATE));
@@ -368,34 +461,22 @@ export const parseDatabaseRows = (values: any[][]): { teachers: Teacher[], repor
     return { teachers, reportsMap };
 };
 
-/**
- * Generates the full CSV content with BOM for Excel Arabic support
- */
 export const generateCSVContent = (
     teachers: Teacher[],
     currentReport?: ReportData,
     reportsMap?: Record<string, ReportData>
 ): string => {
     const rows = generateDatabaseRows(teachers, currentReport, reportsMap);
-    
-    // Convert to CSV
     const csv = rows.map(row => 
         row.map(cell => {
             const cellStr = String(cell || '').replace(/"/g, '""');
-            // Force text mode by quoting
             return `"${cellStr}"`;
         }).join(',')
     ).join('\n');
-
-    // Add BOM for Excel Arabic support
     return "\ufeff" + csv;
 };
 
-/**
- * Parses a CSV string into database rows
- */
 export const parseCSVContent = (csvText: string) => {
-    // Basic CSV parser that handles quoted strings
     const rows: string[][] = [];
     let currentRow: string[] = [];
     let currentCell = '';
@@ -408,7 +489,7 @@ export const parseCSVContent = (csvText: string) => {
         if (char === '"') {
             if (inQuotes && nextChar === '"') {
                 currentCell += '"';
-                i++; // Skip escaped quote
+                i++;
             } else {
                 inQuotes = !inQuotes;
             }
@@ -425,11 +506,17 @@ export const parseCSVContent = (csvText: string) => {
             currentCell += char;
         }
     }
-    // Push last cell/row
     if (currentCell || currentRow.length > 0) {
         currentRow.push(currentCell);
         rows.push(currentRow);
     }
 
     return parseDatabaseRows(rows);
+};
+
+const normalizeStatus = (val: any): string => {
+    const s = String(val).trim().toLowerCase();
+    if (s.includes('متعاقد') || s.includes('contract')) return 'contractuel';
+    if (s.includes('متربص') || s.includes('stag')) return 'stagiere';
+    return 'titulaire';
 };

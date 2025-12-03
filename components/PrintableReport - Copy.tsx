@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { ReportData, Teacher } from '../types';
 import { FileDown, Printer } from 'lucide-react';
@@ -262,8 +261,8 @@ const PrintableReport: React.FC<PrintableReportProps> = ({ report, teacher, sign
                      <p className="text-[12px] font-bold mb-2">{report.inspectorName}</p>
                      
                      {signature ? (
-                        <div className="absolute top-6 left-1/2 transform -translate-x-1/2 w-56 h-32 flex items-center justify-center pointer-events-none z-10">
-                            <img src={signature} alt="Signature" className="w-full h-full mix-blend-multiply object-contain transform -rotate-2 scale-125" />
+                        <div className="absolute top-12 left-1/2 transform -translate-x-1/2 w-28 h-20 flex items-center justify-center pointer-events-none">
+                            <img src={signature} alt="Signature" className="max-w-full max-h-full mix-blend-multiply object-contain" />
                         </div>
                      ) : (
                         <div className="mt-2 text-[8px] text-gray-300 border border-dashed border-gray-300 w-16 h-16 rounded-full flex items-center justify-center rotate-[-15deg]">

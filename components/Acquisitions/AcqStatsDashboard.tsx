@@ -1,0 +1,175 @@
+
+import React, { useMemo, useState } from 'react';
+import { AcqClassRecord, AcqFilterState } from '../../types/acquisitions';
+import { BarChart2, PieChart, FileText } from 'lucide-react';
+import AcqYear2ArabicStats from './Analytics/AcqYear2ArabicStats';
+import AcqYear2MathStats from './Analytics/AcqYear2MathStats';
+import AcqTeacherProfile from './Analytics/AcqTeacherProfile';
+import AcqStructuredAnalysis from './Analytics/AcqStructuredAnalysis';
+
+interface AcqStatsDashboardProps {
+    records: AcqClassRecord[];
+    availableSchools: string[];
+    filters: AcqFilterState; // Receive filters from parent
+}
+
+const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters }) => {
+    // Destructure filters for easier access
+    const { scope, selectedSchool, selectedLevel, selectedClass, selectedSubject } = filters;
+    const [showStructuredAnalysis, setShowStructuredAnalysis] = useState(false);
+
+    // --- 1. Filter Data for SPECIFIC Subject Analysis (The standard view) ---
+    const filteredRecords = useMemo(() => {
+        return records.filter(r => {
+            // Apply Filters Logic
+            if (selectedLevel && r.level !== selectedLevel) return false;
+            if (selectedSubject && r.subject !== selectedSubject) return false;
+            
+            if (scope === 'district') return true; 
+            if (scope === 'school' || scope === 'class') {
+                if (r.schoolName !== selectedSchool) return false;
+            }
+            if (scope === 'class') {
+                if (r.className !== selectedClass) return false;
+            }
+            return true;
+        });
+    }, [records, scope, selectedSchool, selectedLevel, selectedClass, selectedSubject]);
+
+    // --- 2. Filter Data for CROSS-SUBJECT Analysis (Teacher Profile) ---
+    const classSiblingRecords = useMemo(() => {
+        if (scope !== 'class' || !selectedSchool || !selectedClass || !selectedLevel) return [];
+        return records.filter(r => 
+            r.schoolName === selectedSchool && 
+            r.className === selectedClass && 
+            r.level === selectedLevel
+        );
+    }, [records, scope, selectedSchool, selectedClass, selectedLevel]);
+
+    // --- 3. Records for Structured Analysis (Context-Aware) ---
+    // If we are in "District" mode with no specific filters, we use ALL records to give a global view.
+    // Otherwise we use the filtered subset.
+    const analysisRecords = useMemo(() => {
+        if (scope === 'district' && !selectedLevel) return records; // All district data
+        return filteredRecords;
+    }, [scope, selectedLevel, records, filteredRecords]);
+
+
+    // --- Validation to show content ---
+    const isReadyToAnalyze = useMemo(() => {
+        if (!selectedLevel || !selectedSubject) return false;
+        if (scope === 'school' && !selectedSchool) return false;
+        if (scope === 'class' && (!selectedSchool || !selectedClass)) return false;
+        return true;
+    }, [scope, selectedSchool, selectedLevel, selectedClass, selectedSubject]);
+
+    return (
+        <div className="flex flex-col h-full bg-slate-50/50">
+            
+            {/* --- GLOBAL ACTION BAR --- */}
+            <div className="bg-white p-4 border-b flex justify-between items-center shadow-sm shrink-0">
+                <div className="text-sm text-slate-500">
+                    <span className="font-bold text-slate-700">النطاق الحالي:</span> {scope === 'district' ? 'المقاطعة' : scope === 'school' ? selectedSchool : `${selectedSchool} / ${selectedClass}`}
+                </div>
+                
+                <button 
+                    onClick={() => setShowStructuredAnalysis(true)}
+                    className="bg-indigo-600 text-white px-5 py-2 rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center gap-2 font-bold text-sm animate-in slide-in-from-top-2"
+                >
+                    <FileText size={18} />
+                    تقرير المعالجة المهيكلة (الوزاري)
+                </button>
+            </div>
+
+            {/* --- MODAL FOR STRUCTURED ANALYSIS --- */}
+            {showStructuredAnalysis && (
+                <AcqStructuredAnalysis 
+                    records={analysisRecords}
+                    scope={scope}
+                    contextName={scope === 'district' ? 'المقاطعة' : scope === 'school' ? selectedSchool : `${selectedSchool} - ${selectedClass}`}
+                    onClose={() => setShowStructuredAnalysis(false)}
+                />
+            )}
+
+            {/* Main Content Area */}
+            <div className="flex-1 p-6 md:p-8 overflow-y-auto">
+                {isReadyToAnalyze ? (
+                    <div className="max-w-[1600px] mx-auto animate-in zoom-in-95 duration-500">
+                        
+                        {/* --- EXPERT TEACHER PROFILE (Only in Class Scope) --- */}
+                        {scope === 'class' && (
+                            <AcqTeacherProfile 
+                                records={classSiblingRecords}
+                                className={selectedClass}
+                                schoolName={selectedSchool}
+                            />
+                        )}
+
+                        {/* --- SPECIFIC SUBJECT ANALYSIS --- */}
+                        {selectedLevel === '2AP' && selectedSubject.includes('العربية') ? (
+                            <AcqYear2ArabicStats 
+                                records={filteredRecords} 
+                                scope={scope} 
+                                contextName={scope === 'district' ? 'المقاطعة' : scope === 'school' ? selectedSchool : `${selectedSchool} - ${selectedClass}`}
+                            />
+                        ) : selectedLevel === '2AP' && selectedSubject.includes('الرياضيات') ? (
+                            <AcqYear2MathStats
+                                records={filteredRecords}
+                                scope={scope}
+                                contextName={scope === 'district' ? 'المقاطعة' : scope === 'school' ? selectedSchool : `${selectedSchool} - ${selectedClass}`}
+                            />
+                        ) : (
+                            // Fallback for not-yet-implemented subjects
+                            <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden min-h-[400px] flex flex-col">
+                                <div className="bg-slate-900 text-white p-6 flex justify-between items-start">
+                                    <div>
+                                        <h2 className="text-2xl font-bold font-serif mb-1">
+                                            {`تحليل نتائج: ${selectedSubject}`}
+                                        </h2>
+                                        <div className="flex items-center gap-3 text-slate-400 text-sm">
+                                            <span className="bg-slate-800 px-2 py-0.5 rounded text-white font-bold">{selectedLevel}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex-1 p-8 flex flex-col items-center justify-center text-center bg-slate-50/50">
+                                    <div className="w-24 h-24 bg-white rounded-full shadow-lg flex items-center justify-center mb-6">
+                                        <BarChart2 size={48} className="text-gray-400" />
+                                    </div>
+                                    <h3 className="text-xl font-bold text-slate-700 mb-2">قيد التطوير</h3>
+                                    <p className="text-slate-500">
+                                        النموذج التحليلي الخاص بـ <b>{selectedSubject} - {selectedLevel}</b> قيد الإنجاز.
+                                        <br/>
+                                        حالياً، النظام يدعم التحليل التفصيلي لـ <b>اللغة العربية (السنة الثانية)</b> و <b>الرياضيات (السنة الثانية)</b>.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                    </div>
+                ) : (
+                    /* Empty State */
+                    <div className="h-full flex flex-col items-center justify-center text-slate-400 pb-20">
+                        <div className="w-32 h-32 bg-slate-200 rounded-full flex items-center justify-center mb-6 opacity-50 animate-pulse">
+                            <PieChart size={64} className="text-slate-400" />
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-600 mb-2">بانتظار تحديد معايير التحليل</h3>
+                        <p className="text-slate-400 max-w-sm text-center mb-6">
+                            يرجى استخدام <b>القائمة الجانبية</b> لاختيار النطاق، المدرسة، والمادة لعرض التحليل الدقيق.
+                        </p>
+                        
+                        {/* Prompt to use the new feature regardless of filters */}
+                        <button 
+                            onClick={() => setShowStructuredAnalysis(true)}
+                            className="bg-white border border-indigo-200 text-indigo-600 px-6 py-3 rounded-xl hover:bg-indigo-50 transition-colors font-bold text-sm shadow-sm flex items-center gap-2"
+                        >
+                            <FileText size={18}/>
+                            أو افتح التقرير الشامل للمقاطعة الآن
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+export default AcqStatsDashboard;
