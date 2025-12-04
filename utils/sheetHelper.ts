@@ -7,15 +7,24 @@ declare const XLSX: any;
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-const normalizeDate = (val: any): string => {
+// Exported so it can be used in DatabaseManager for JSON restoration
+export const normalizeDate = (val: any): string => {
     if (!val) return '';
+    
+    // Handle ISO Format (e.g., 2024-06-30T00:00:00.000Z)
+    const str = String(val).trim();
+    if (str.includes('T')) {
+        return str.split('T')[0];
+    }
+
+    // Handle Excel Serial Numbers
     if (typeof val === 'number' && val > 20000) {
         const date = new Date(Math.round((val - 25569) * 86400 * 1000));
         if (!isNaN(date.getTime())) {
             return date.toISOString().split('T')[0];
         }
     }
-    const str = String(val).trim();
+
     // Try DD/MM/YYYY
     const parts = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
     if (parts) {
@@ -30,6 +39,80 @@ const normalizeDate = (val: any): string => {
          return str;
     }
     return str; 
+};
+
+// --- SMART NORMALIZATION FUNCTIONS ---
+
+const normalizeRank = (input: string): string => {
+    if (!input) return "أستاذ التعليم الابتدائي";
+    const text = input.trim().toLowerCase(); // Normalize input
+
+    // 1. أستاذ مميز
+    if (text.includes("مميز") || text.includes("متميز")) {
+        return "أستاذ مميز في التعليم الابتدائي";
+    }
+    
+    // 2. أستاذ مكون
+    if (text.includes("مكون")) {
+        return "أستاذ مكون في التعليم الابتدائي";
+    }
+
+    // 3. قسم ثان (ق2, 2, ثان)
+    if (text.includes("ثان") || text.includes("ثاني") || text.includes("ق2") || text.includes("قسم 2") || /\b2\b/.test(text)) {
+        return "أستاذ التعليم الابتدائي قسم ثان";
+    }
+
+    // 4. قسم أول (ق1, 1, أول)
+    if (text.includes("أول") || text.includes("اول") || text.includes("ق1") || text.includes("قسم 1") || /\b1\b/.test(text)) {
+        return "أستاذ التعليم الابتدائي قسم أول";
+    }
+
+    // Default
+    return "أستاذ التعليم الابتدائي";
+};
+
+const normalizeDegree = (input: string): string => {
+    if (!input || input.trim() === '') return "ليسانس"; // Default Minimum Requirement
+    const text = input.trim().toLowerCase();
+
+    if (text.includes("ماستر") || text.includes("ماجستير") || text.includes("master")) {
+        return "ماستر";
+    }
+    
+    if (text.includes("عليا") || text.includes("ens")) {
+        return "خريج(ة) المدرسة العليا للأساتذة";
+    }
+
+    if (text.includes("معهد") || text.includes("ite")) {
+        return "خريج(ة) المعهد التكنولوجي";
+    }
+
+    if (text.includes("تطبيقية") || text.includes("deua")) {
+        return "شهادة الدراسات الجامعية التطبيقية";
+    }
+
+    if (text.includes("دكتوراه") || text.includes("ما بعد") || text.includes("دراسات عليا")) {
+        return "شهادة الدراسات العليا";
+    }
+
+    // Default catch-all for anything else containing 'licence' or generic
+    return "ليسانس";
+};
+
+const normalizeLevel = (input: string): string => {
+    if (!input) return "";
+    const text = input.trim();
+
+    if (text.includes("تحضيري") || text.includes("ت ح")) return "التربية التحضيرية";
+    
+    // Check for numbers 1-5
+    if (text.includes("1") || text.includes("أول") || text.includes("اول")) return "السنة الأولى";
+    if (text.includes("2") || text.includes("ثاني")) return "السنة الثانية";
+    if (text.includes("3") || text.includes("ثالث")) return "السنة الثالثة";
+    if (text.includes("4") || text.includes("رابع")) return "السنة الرابعة";
+    if (text.includes("5") || text.includes("خامس")) return "السنة الخامسة";
+
+    return text; // Return as is if no match found
 };
 
 export const generateSchoolTemplate = () => {
@@ -60,7 +143,6 @@ export const generateSchoolTemplate = () => {
     wb.Workbook = { Views: [{ RTL: true }] };
 
     // --- 3. CREATE DATA SHEET (HIDDEN) FIRST ---
-    // Critical: Creating this first ensures Dropdowns work reliably in some Excel versions
     const wsData = XLSX.utils.aoa_to_sheet(dataSheetRows);
     XLSX.utils.book_append_sheet(wb, wsData, "Lists");
 
@@ -74,10 +156,10 @@ export const generateSchoolTemplate = () => {
         "تاريخ التوظيف",      // F
         "الرتبة",             // G
         "تاريخ التعيين في الرتبة", // H
-        "الدرجة",             // I
+        "الدرجة (رقم)",       // I (Force Text)
         "تاريخ الدرجة",       // J
         "الوضعية",            // K
-        "آخر نقطة تفتيش",     // L
+        "آخر نقطة تفتيش",     // L (Force Text)
         "تاريخ آخر تفتيش",    // M
         "المدرسة الحالية",    // N
         "المستوى المسند"      // O
@@ -100,8 +182,10 @@ export const generateSchoolTemplate = () => {
     const rangeLimit = 200; 
 
     wsMain['!dataValidation'] = [
-        { sqref: `D2:D${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$B$2:$B$${degrees.length + 1}`, showDropDown: true },
-        { sqref: `G2:G${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$A$2:$A$${ranks.length + 1}`, showDropDown: true },
+        // Removed Dropdown for Degree to allow flexible typing -> Normalized later
+        // { sqref: `D2:D${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$B$2:$B$${degrees.length + 1}`, showDropDown: true },
+        // Removed Dropdown for Rank to allow free typing -> Normalized later
+        // { sqref: `G2:G${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$A$2:$A$${ranks.length + 1}`, showDropDown: true },
         { sqref: `I2:I${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$D$2:$D$${echelons.length + 1}`, showDropDown: true },
         { sqref: `K2:K${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$C$2:$C$${status.length + 1}`, showDropDown: true },
         { sqref: `O2:O${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$E$2:$E$${levels.length + 1}`, showDropDown: true }
@@ -110,10 +194,19 @@ export const generateSchoolTemplate = () => {
     // Format Date Columns as Text to prevent Excel auto-formatting issues
     const dateCols = [1, 4, 5, 7, 9, 12]; 
     for(let R = 1; R < rangeLimit; ++R) {
+        // Date Columns
         dateCols.forEach(C => {
             const cellRef = XLSX.utils.encode_cell({c: C, r: R});
             if(!wsMain[cellRef]) wsMain[cellRef] = { t: 's', v: '' }; 
         });
+
+        // CRITICAL FIX: Force Echelon (Col I -> 8) and Mark (Col L -> 11) to be TEXT ('s')
+        // This prevents "10" becoming a date.
+        const echelonRef = XLSX.utils.encode_cell({c: 8, r: R});
+        if(!wsMain[echelonRef]) wsMain[echelonRef] = { t: 's', v: '' };
+
+        const markRef = XLSX.utils.encode_cell({c: 11, r: R});
+        if(!wsMain[markRef]) wsMain[markRef] = { t: 's', v: '' };
     }
 
     XLSX.utils.book_append_sheet(wb, wsMain, "معلومات_الأساتذة");
@@ -121,7 +214,8 @@ export const generateSchoolTemplate = () => {
     return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
 };
 
-export const parseSchoolExcel = (data: ArrayBuffer): Teacher[] => {
+// Modified to return BOTH Teachers and Reports (to capture School/Class)
+export const parseSchoolExcel = (data: ArrayBuffer): { teachers: Teacher[], reports: Record<string, ReportData> } => {
     const workbook = XLSX.read(data, { type: 'array' });
     
     // Stable Logic: Look for "معلومات_الأساتذة", if not found, take the SECOND sheet (index 1) because Index 0 is "Lists"
@@ -135,16 +229,19 @@ export const parseSchoolExcel = (data: ArrayBuffer): Teacher[] => {
     }
 
     const worksheet = workbook.Sheets[targetSheetName];
-    const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true }); // raw: true to handle dates better
+    const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true }); 
     
-    if (!rows || rows.length < 2) return [];
+    if (!rows || rows.length < 2) return { teachers: [], reports: {} };
 
     const teachers: Teacher[] = [];
+    const reports: Record<string, ReportData> = {};
 
     // Skip header row (index 0)
     for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
         if (!row || row.length === 0 || !row[0]) continue;
+
+        const id = generateId();
 
         // Determine Status
         const rawStatus = String(row[10] || '').trim();
@@ -152,15 +249,26 @@ export const parseSchoolExcel = (data: ArrayBuffer): Teacher[] => {
         if (rawStatus.includes('متعاقد')) status = 'contractuel';
         else if (rawStatus.includes('متربص')) status = 'stagiere';
 
+        // Extract and Normalize Data
+        const rawRank = String(row[6] || '').trim();
+        const normalizedRank = normalizeRank(rawRank);
+
+        const rawDegree = String(row[3] || '').trim();
+        const normalizedDegree = normalizeDegree(rawDegree);
+
+        const rawSchool = String(row[13] || '').trim(); // Column N
+        const rawLevel = String(row[14] || '').trim();  // Column O
+        const normalizedLevel = normalizeLevel(rawLevel);
+
         const teacher: Teacher = {
-            id: generateId(),
+            id: id,
             fullName: String(row[0]).trim(),
             birthDate: normalizeDate(row[1]),
             birthPlace: String(row[2] || '').trim(),
-            degree: String(row[3] || '').trim(),
+            degree: normalizedDegree, // Use Normalized
             degreeDate: normalizeDate(row[4]),
             recruitmentDate: normalizeDate(row[5]),
-            rank: String(row[6] || '').trim(),
+            rank: normalizedRank, // Use Normalized
             currentRankDate: normalizeDate(row[7]),
             echelon: String(row[8] || '').trim(),
             echelonDate: normalizeDate(row[9]),
@@ -172,13 +280,25 @@ export const parseSchoolExcel = (data: ArrayBuffer): Teacher[] => {
         
         if (teacher.fullName && teacher.fullName.length > 2) {
             teachers.push(teacher);
+
+            // Create Initial Report Data to hold School & Level
+            if (rawSchool || normalizedLevel) {
+                reports[id] = {
+                    ...INITIAL_REPORT_STATE,
+                    id: generateId(),
+                    teacherId: id,
+                    school: rawSchool,
+                    level: normalizedLevel,
+                    // If level exists, we can infer Group or leave empty
+                    group: '',
+                };
+            }
         }
     }
 
-    return teachers;
+    return { teachers, reports };
 };
 
-// ... (Rest of the file: generateDatabaseRows, parseDatabaseRows, etc. keep as is)
 export const generateDatabaseRows = (
     teachers: Teacher[], 
     currentReport?: ReportData,
@@ -219,6 +339,14 @@ export const generateDatabaseRows = (
 
     const allHeaders = [...basicHeaders, ...reportHeaders, ...legacyHeaders, ...obsHeaders];
 
+    // Variables to hold the "Last Known Good Value" for fill-down logic
+    let lastWilaya = '';
+    let lastDistrict = '';
+    
+    // First pass to find any global values if they exist
+    if (currentReport?.wilaya) lastWilaya = currentReport.wilaya;
+    if (currentReport?.district) lastDistrict = currentReport.district;
+
     const rows = teachers.map(t => {
         if(!t) return []; 
         let r: ReportData = INITIAL_REPORT_STATE;
@@ -232,6 +360,14 @@ export const generateDatabaseRows = (
             hasReport = true;
         }
 
+        // Fill Down Logic: Update tracking variables if current row has data
+        if (r.wilaya) lastWilaya = r.wilaya;
+        if (r.district) lastDistrict = r.district;
+
+        // Use tracked variables if current row is empty
+        const effectiveWilaya = r.wilaya || lastWilaya;
+        const effectiveDistrict = r.district || lastDistrict;
+
         const ld = r.legacyData || INITIAL_REPORT_STATE.legacyData!;
 
         const basicData = [
@@ -241,8 +377,8 @@ export const generateDatabaseRows = (
         ];
 
         const reportData = [
-            hasReport ? r.wilaya : '',
-            hasReport ? r.district : '',
+            effectiveWilaya,
+            effectiveDistrict,
             hasReport ? r.school : '',
             hasReport ? r.inspectionDate : '',
             hasReport ? r.subject : '',

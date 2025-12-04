@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { Teacher } from '../types';
-import { X, Calendar, User, Award, History, ArrowRight, TrendingUp, Clock, AlertCircle, GraduationCap, FileText, Star, ShieldCheck, Briefcase, ScrollText, CheckCircle2 } from 'lucide-react';
+import { X, Calendar, User, Award, History, ArrowRight, TrendingUp, Clock, AlertCircle, GraduationCap, FileText, Star, ShieldCheck, Briefcase, ScrollText, CheckCircle2, Lock, Save } from 'lucide-react';
 
 interface TeacherDrawerProps {
     teacher: Teacher | null;
@@ -16,10 +17,13 @@ const TeacherDrawer: React.FC<TeacherDrawerProps> = ({ teacher, isOpen, onClose,
     
     // Local state for tenure date editing
     const [tenureDate, setTenureDate] = useState('');
+    const [privateNotes, setPrivateNotes] = useState('');
+    const [isSavingNotes, setIsSavingNotes] = useState(false);
 
     useEffect(() => {
         if (teacher) {
             setTenureDate(teacher.tenureDate || '');
+            setPrivateNotes(teacher.privateNotes || '');
         }
     }, [teacher]);
 
@@ -29,6 +33,14 @@ const TeacherDrawer: React.FC<TeacherDrawerProps> = ({ teacher, isOpen, onClose,
         if (onUpdateTeacher) {
             onUpdateTeacher({ ...teacher, tenureDate });
         }
+    };
+
+    const handleSaveNotes = () => {
+        setIsSavingNotes(true);
+        if (onUpdateTeacher) {
+            onUpdateTeacher({ ...teacher, privateNotes });
+        }
+        setTimeout(() => setIsSavingNotes(false), 500);
     };
 
     // Helper to format dates
@@ -130,6 +142,33 @@ const TeacherDrawer: React.FC<TeacherDrawerProps> = ({ teacher, isOpen, onClose,
 
                 {/* Body - Timeline */}
                 <div className="flex-1 overflow-y-auto p-6">
+                    
+                    {/* Private Notes Section */}
+                    <div className="bg-amber-50/50 border border-amber-100 rounded-2xl p-4 mb-8 relative group focus-within:ring-2 focus-within:ring-amber-200 transition-all">
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2 text-amber-800 font-bold text-sm">
+                                <Lock size={14} className="text-amber-600"/>
+                                ملاحظات سرية
+                            </div>
+                            {privateNotes !== teacher.privateNotes && (
+                                <button 
+                                    onClick={handleSaveNotes}
+                                    className="text-[10px] bg-amber-500 text-white px-2 py-1 rounded flex items-center gap-1 hover:bg-amber-600 transition-colors"
+                                >
+                                    <Save size={10} /> حفظ
+                                </button>
+                            )}
+                        </div>
+                        <textarea 
+                            value={privateNotes}
+                            onChange={(e) => setPrivateNotes(e.target.value)}
+                            onBlur={handleSaveNotes}
+                            className="w-full bg-transparent text-sm text-gray-700 outline-none resize-none placeholder:text-gray-400/70"
+                            placeholder="اكتب ملاحظات خاصة عن هذا الأستاذ لا تظهر في التقارير (ظروف اجتماعية، وعود، نقاط متابعة)..."
+                            rows={3}
+                        />
+                    </div>
+
                     <div className="flex items-center gap-2 mb-6">
                         <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
                             <History size={20} />

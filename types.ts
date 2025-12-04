@@ -14,7 +14,8 @@ export interface Teacher {
   lastInspectionDate: string;
   lastMark: number;
   status: 'stagiere' | 'contractuel' | 'titulaire';
-  tenureDate?: string; // New field for Tenure Date as requested
+  tenureDate?: string; 
+  privateNotes?: string; // الملاحظات السرية
 }
 
 export interface ObservationItem {
@@ -61,7 +62,7 @@ export interface LegacyReportOptions {
     municipality: string;
 
     familyStatus: string;
-    maidenName?: string; // اللقب الأصلي (للمتزوجات)
+    maidenName?: string; 
     trainingInstitute: string; 
     trainingDate: string; 
     graduationDate: string; 
@@ -82,10 +83,9 @@ export interface LegacyReportOptions {
     registersUsed: string; 
     registersMonitored: string; 
     
-    // New Fields matching the document strict structure
-    scheduledPrograms: string; // البرامج المقررة
-    progression: string;       // التدرج
-    duties: string;            // الواجبات
+    scheduledPrograms: string; 
+    progression: string;       
+    duties: string;            
 
     lessonExecution: string; 
     informationValue: string; 
@@ -142,11 +142,11 @@ export interface TenureReportData {
     
     contestDate: string; 
     recruitmentType: string;
-    university: string; // Added field for University/Institute
+    university: string; 
 
     lessons: TenureLesson[];
 
-    oralQuestions: OralQuestions; // Changed from string to object
+    oralQuestions: OralQuestions; 
     
     pedagogyMark: number; 
     oralMark: number; 
@@ -166,23 +166,21 @@ export interface QuarterlyReportData {
     term: string;
     schoolYear: string;
     
-    startDate: string; // New: Start of the quarter
-    endDate: string;   // New: End of the quarter
+    startDate: string; 
+    endDate: string;   
 
-    // Table 1: Stats & Activities
     teachersTotal: number;
     teachersTrainee: number;
-    teachersTenure: number; // Candidates (Manual)
+    teachersTenure: number; 
     
-    visitsInspection: number; // Auto
-    visitsTenure: number;     // Auto
-    visitsTraining: number;   // Manual
-    visitsTrainingBenefit: number; // Manual
+    visitsInspection: number; 
+    visitsTenure: number;     
+    visitsTraining: number;   
+    visitsTrainingBenefit: number; 
     
-    tasksInvestigations: number; // Manual
-    tasksSupervision: number;    // Manual
+    tasksInvestigations: number; 
+    tasksSupervision: number;    
 
-    // Table 2: Days (Auto)
     days: {
         sun: number;
         mon: number;
@@ -191,7 +189,6 @@ export interface QuarterlyReportData {
         thu: number;
     };
 
-    // Table 3: Ranks (Auto)
     ranks: {
         stagiere: number;
         primary: number;
@@ -201,7 +198,6 @@ export interface QuarterlyReportData {
         contract: number;
     };
 
-    // Table 4: Levels (Auto)
     levels: {
         prep: number;
         year1: number;
@@ -211,7 +207,6 @@ export interface QuarterlyReportData {
         year5: number;
     };
 
-    // Table 5: Subjects (Auto)
     subjects: {
         arabic: number;
         math: number;
@@ -224,6 +219,13 @@ export interface QuarterlyReportData {
     };
 }
 
+export interface LibraryLink {
+    id: string;
+    title: string;
+    url: string;
+    category: 'legislation' | 'pedagogy' | 'admin' | 'other';
+}
+
 export enum AppView {
   DASHBOARD = 'DASHBOARD',
   EDITOR = 'EDITOR',
@@ -233,5 +235,7 @@ export enum AppView {
   PROMOTIONS = 'PROMOTIONS',
   TENURE_EDITOR = 'TENURE_EDITOR',
   QUARTERLY_REPORT = 'QUARTERLY_REPORT',
-  ACQUISITIONS = 'ACQUISITIONS'
+  ACQUISITIONS = 'ACQUISITIONS',
+  SEMINARS = 'SEMINARS',
+  ADMIN_ASSISTANT = 'ADMIN_ASSISTANT'
 }

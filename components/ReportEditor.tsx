@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { ReportData, Teacher } from '../types';
 import { generateReportAssessment, suggestImprovement } from '../services/geminiService';
-import { Wand2, Printer, RefreshCcw, Loader2, Sparkles, Cloud, MapPin, User, Briefcase, BookOpen, Stamp, ChevronDown, PenTool } from 'lucide-react';
+import { Wand2, Printer, RefreshCcw, Loader2, Sparkles, Cloud, MapPin, User, Briefcase, BookOpen, Stamp, ChevronDown, PenTool, Maximize2, Minimize2 } from 'lucide-react';
 import { OBSERVATION_SUGGESTIONS, MODERN_SUBJECTS, MODERN_DEGREES, MODERN_RANKS, MODERN_LEVELS } from '../constants';
 import VoiceTextarea from './VoiceTextarea';
 import VoiceInput from './VoiceInput';
@@ -31,6 +32,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
     const [activeTab, setActiveTab] = useState<'info' | 'rubric' | 'result'>('info');
     const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
     const [editMode, setEditMode] = useState<'manual' | 'ai'>('manual');
+    const [isFocusMode, setIsFocusMode] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     
     const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
@@ -134,30 +136,39 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
     const categories = Array.from(new Set(report.observations.map(o => o.category)));
 
     return (
-        <div className="h-full flex flex-col bg-gray-50">
+        <div className={`h-full flex flex-col bg-gray-50 transition-all duration-300 ${isFocusMode ? 'fixed inset-0 z-[100] w-screen h-screen' : ''}`}>
             {/* Toolbar */}
-            <div className="bg-white border-b p-4 flex justify-between items-center sticky top-0 z-20 shadow-sm">
-                <div className="flex gap-2">
-                    <button onClick={() => setActiveTab('info')} className={`px-4 py-2 rounded-lg font-bold transition-colors ${activeTab === 'info' ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>1. البيانات</button>
-                    <button onClick={() => setActiveTab('rubric')} className={`px-4 py-2 rounded-lg font-bold transition-colors ${activeTab === 'rubric' ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>2. الشبكة</button>
-                    <button onClick={() => setActiveTab('result')} className={`px-4 py-2 rounded-lg font-bold transition-colors ${activeTab === 'result' ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>3. القرار</button>
+            <div className="bg-white border-b p-4 flex justify-between items-center sticky top-0 z-20 shadow-sm shrink-0">
+                <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                    <button onClick={() => setActiveTab('info')} className={`px-4 py-2 rounded-lg font-bold transition-colors whitespace-nowrap ${activeTab === 'info' ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>1. البيانات</button>
+                    <button onClick={() => setActiveTab('rubric')} className={`px-4 py-2 rounded-lg font-bold transition-colors whitespace-nowrap ${activeTab === 'rubric' ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>2. الشبكة</button>
+                    <button onClick={() => setActiveTab('result')} className={`px-4 py-2 rounded-lg font-bold transition-colors whitespace-nowrap ${activeTab === 'result' ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>3. القرار</button>
                 </div>
                 
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 text-xs font-medium transition-colors duration-500">
+                <div className="flex items-center gap-2 md:gap-4">
+                    <div className="hidden md:flex items-center gap-2 text-xs font-medium transition-colors duration-500">
                         {saveStatus === 'saving' ? (
                             <>
                                 <RefreshCcw size={14} className="animate-spin text-blue-500" />
-                                <span className="text-blue-500 hidden md:inline">جاري الحفظ...</span>
+                                <span className="text-blue-500">جاري الحفظ...</span>
                             </>
                         ) : (
                             <>
                                 <Cloud size={14} className="text-green-600" />
-                                <span className="text-green-600 hidden md:inline">تم الحفظ</span>
+                                <span className="text-green-600">تم الحفظ</span>
                             </>
                         )}
                     </div>
                     
+                    {/* Focus Mode Toggle */}
+                    <button 
+                        onClick={() => setIsFocusMode(!isFocusMode)}
+                        className={`p-2 rounded-lg transition-colors ${isFocusMode ? 'bg-indigo-100 text-indigo-600' : 'text-gray-500 hover:bg-gray-100'}`}
+                        title={isFocusMode ? "إنهاء وضع التركيز" : "وضع التركيز (ملء الشاشة)"}
+                    >
+                        {isFocusMode ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+                    </button>
+
                     {onUploadSignature && (
                         <div className="relative">
                             <input type="file" ref={fileInputRef} onChange={onUploadSignature} className="hidden" accept="image/*" />
@@ -168,14 +179,14 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
                         </div>
                     )}
 
-                    <button onClick={onPrint} className="flex items-center gap-2 bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900">
+                    <button onClick={onPrint} className="flex items-center gap-2 bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900 shadow-sm">
                         <Printer size={18} />
-                        طباعة
+                        <span className="hidden md:inline">طباعة</span>
                     </button>
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 max-w-4xl mx-auto w-full">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 max-w-4xl mx-auto w-full">
                 
                 {/* Tab 1: Info */}
                 {activeTab === 'info' && (
@@ -346,7 +357,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
                                     {report.generalAssessment ? 'إعادة الصياغة بالذكاء الاصطناعي' : 'توليد التقرير بالذكاء الاصطناعي'}
                                 </button>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-4 items-end">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">العلامة بالأرقام (/20)</label>
                                     <input type="number" min="0" max="20" step="0.25" value={report.finalMark} onChange={e => updateField('finalMark', parseFloat(e.target.value))} className="w-full border rounded-lg p-2 text-2xl font-bold text-center focus:ring-2 focus:ring-blue-500 outline-none" />

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Teacher, ReportData, TenureReportData } from '../types';
-import { generateDatabaseRows, parseDatabaseRows } from '../utils/sheetHelper';
+import { generateDatabaseRows, parseDatabaseRows, normalizeDate } from '../utils/sheetHelper';
 import { syncWithScript, readFromScript } from '../services/sheetsService';
 import { saveScriptUrlToCloud, isSupabaseConfigured } from '../services/supabaseService';
 import { Database, RefreshCcw, CheckCircle2, AlertCircle, ExternalLink, HardDrive, Download, Upload, CloudLightning, HelpCircle, Link, AlertTriangle, Cloud } from 'lucide-react';
@@ -76,6 +76,13 @@ const DatabaseManager: React.FC<DatabaseManagerProps> = ({
              setStatus('error');
              setMessage('يرجى إدخال رابط السكريبت أولاً.');
              return;
+        }
+
+        // GUARD CLAUSE: Prevent syncing empty data which clears the sheet
+        if (teachers.length === 0) {
+            setStatus('error');
+            setMessage('لا توجد بيانات أساتذة لإرسالها. تم إلغاء العملية لتجنب مسح الملف.');
+            return;
         }
         
         setIsLoading(true);
@@ -163,7 +170,36 @@ const DatabaseManager: React.FC<DatabaseManagerProps> = ({
                 const json = JSON.parse(event.target?.result as string);
                 if (json.teachers) {
                     if(window.confirm('هل أنت متأكد؟ سيتم دمج/استبدال البيانات.')) {
-                        onRestore(json.teachers, json.reportsMap || {}, json.tenureReportsMap || {});
+                        
+                        // SANITIZE DATES ON RESTORE
+                        // Fixes ISO dates issue (e.g. 2024-06-30T00:00:00.000Z)
+                        const cleanedTeachers = json.teachers.map((t: Teacher) => ({
+                            ...t,
+                            birthDate: normalizeDate(t.birthDate),
+                            recruitmentDate: normalizeDate(t.recruitmentDate),
+                            degreeDate: normalizeDate(t.degreeDate),
+                            currentRankDate: normalizeDate(t.currentRankDate),
+                            echelonDate: normalizeDate(t.echelonDate),
+                            lastInspectionDate: normalizeDate(t.lastInspectionDate),
+                            tenureDate: normalizeDate(t.tenureDate),
+                        }));
+
+                        const cleanedReports: Record<string, ReportData> = {};
+                        if (json.reportsMap) {
+                            Object.entries(json.reportsMap).forEach(([key, r]: [string, any]) => {
+                                cleanedReports[key] = {
+                                    ...r,
+                                    inspectionDate: normalizeDate(r.inspectionDate),
+                                    legacyData: r.legacyData ? {
+                                        ...r.legacyData,
+                                        trainingDate: normalizeDate(r.legacyData.trainingDate),
+                                        graduationDate: normalizeDate(r.legacyData.graduationDate)
+                                    } : undefined
+                                };
+                            });
+                        }
+
+                        onRestore(cleanedTeachers, cleanedReports, json.tenureReportsMap || {});
                         
                         // استرجاع الإعدادات والرابط إن وجد
                         if (json.settings) {
@@ -178,10 +214,11 @@ const DatabaseManager: React.FC<DatabaseManagerProps> = ({
                         }
 
                         setStatus('success');
-                        setMessage('تم استرجاع البيانات والإعدادات بنجاح.');
+                        setMessage('تم استرجاع البيانات وتنظيف التواريخ بنجاح.');
                     }
                 }
             } catch (err) {
+                console.error(err);
                 setStatus('error');
                 setMessage('ملف غير صالح.');
             }
