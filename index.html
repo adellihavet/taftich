@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
   <head>
@@ -38,79 +39,80 @@
       }
     </script>
     <style>
-      /* --- PRINT STYLES (CRITICAL FIXES) --- */
+      /* --- PRINT STYLES (CORRECTED) --- */
       @media print {
         @page { 
             size: A4 portrait; 
-            margin: 0 !important; /* إلغاء هوامش المتصفح الافتراضية */
+            margin: 0; 
         }
         
-        /* إعادة تعيين إجبارية لكل الحاويات للسماح بتعدد الصفحات */
+        /* 
+           CRITICAL FIX: Override React/Tailwind layout constraints.
+           Force white background and remove any gradients/images that cause black pages.
+        */
         html, body, #root, #root > div {
-            width: 100% !important;
             height: auto !important;
             min-height: 0 !important;
-            overflow: visible !important; /* هذا هو السر لظهور الصفحة الثانية */
+            width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
-            position: static !important;
+            overflow: visible !important;
             display: block !important;
-            background: white !important;
+            position: static !important;
+            background-color: white !important;
+            background-image: none !important; /* Kills the dark gradient */
         }
 
-        /* إخفاء واجهة التطبيق */
-        .print\:hidden, nav, aside, .no-print {
+        /* Hide UI Elements */
+        .print\:hidden, nav, aside, .no-print, button {
             display: none !important;
         }
 
-        /* إظهار التقرير */
         .print\:block {
             display: block !important;
-            height: auto !important;
-            overflow: visible !important;
         }
         
-        /* حاوية الصفحة A4 */
+        /* A4 Page Container */
         .a4-page {
             width: 210mm;
-            height: 296mm; /* أقل بـ 1مم لتجنب إنشاء صفحة ثالثة فارغة */
-            padding: 12mm 15mm; /* هوامش داخلية مريحة */
+            height: 296mm; /* Exact A4 Height */
+            padding: 10mm 12mm; /* Standard Margins */
             margin: 0 auto;
             background: white;
             position: relative;
             box-sizing: border-box;
-            page-break-after: always; /* فرض صفحة جديدة */
-            page-break-inside: avoid;
+            page-break-after: always;
+            break-after: page;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
-            border: none !important; /* إزالة حدود المعاينة */
+            border: none !important;
         }
 
         .a4-page:last-child {
-            page-break-after: auto;
+            page-break-after: auto !important;
+            break-after: auto !important;
         }
         
-        /* ضمان ظهور الحدود السوداء */
-        * { border-color: #000 !important; }
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
       }
       
-      /* --- SCREEN PREVIEW STYLES --- */
+      /* Screen Preview */
       @media screen {
           .a4-page {
               width: 210mm;
               height: 297mm;
-              padding: 12mm 15mm;
+              padding: 10mm 15mm;
               margin: 40px auto;
               background: white;
               box-shadow: 0 10px 30px rgba(0,0,0,0.2);
               border: 1px solid #e2e8f0;
-              box-sizing: border-box;
               display: flex;
               flex-direction: column;
+              overflow: hidden;
           }
       }
       
-      /* Custom Scrollbar for modern feel */
       .custom-scrollbar::-webkit-scrollbar {
           width: 6px;
           height: 6px;

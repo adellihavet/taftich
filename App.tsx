@@ -559,16 +559,18 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 text-gray-900 font-sans p-0 md:p-3 lg:p-4 overflow-hidden h-screen flex flex-col">
-      <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} onUpgrade={() => {setIsGoldMember(true); setShowUpgradeModal(false); alert("مبروك! تم تفعيل العضوية الذهبية بنجاح.");}} />
-      <TeacherDrawer 
-        teacher={previewTeacher} 
-        isOpen={!!previewTeacher} 
-        onClose={() => setPreviewTeacher(null)} 
-        onStartInspection={handleStartInspection}
-        onStartLegacyInspection={handleStartLegacyInspection}
-        onStartTenure={handleStartTenure}
-        onUpdateTeacher={handleTeacherUpdate}
-      />
+      <div className="print:hidden">
+        <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} onUpgrade={() => {setIsGoldMember(true); setShowUpgradeModal(false); alert("مبروك! تم تفعيل العضوية الذهبية بنجاح.");}} />
+        <TeacherDrawer 
+            teacher={previewTeacher} 
+            isOpen={!!previewTeacher} 
+            onClose={() => setPreviewTeacher(null)} 
+            onStartInspection={handleStartInspection}
+            onStartLegacyInspection={handleStartLegacyInspection}
+            onStartTenure={handleStartTenure}
+            onUpdateTeacher={handleTeacherUpdate}
+        />
+      </div>
       
       {/* Printable Views (Hidden on Screen) */}
       <div className="hidden print:block">
@@ -576,11 +578,11 @@ const App: React.FC = () => {
         {selectedTeacher && view === AppView.LEGACY_EDITOR && <PrintableLegacyReport report={currentReport} teacher={selectedTeacher} signature={signature} />}
         {selectedTeacher && view === AppView.TENURE_EDITOR && <PrintableTenureReport report={currentTenureReport} teacher={selectedTeacher} signature={signature} />}
         {view === AppView.PROMOTIONS && <PromotionList teachers={filteredTeachers} reportsMap={reportsMap} />}
-        {view === AppView.QUARTERLY_REPORT && <PrintableQuarterlyReport report={currentQuarterlyReport} />}
+        {view === AppView.QUARTERLY_REPORT && <PrintableQuarterlyReport report={currentQuarterlyReport} signature={signature} />}
       </div>
 
       {/* Mobile Header (Visible only on small screens) */}
-      <div className="md:hidden bg-blue-900 text-white p-3 flex justify-between items-center shrink-0 z-50 shadow-md">
+      <div className="md:hidden bg-blue-900 text-white p-3 flex justify-between items-center shrink-0 z-50 shadow-md print:hidden">
           <div className="flex items-center gap-2">
               <Hexagon className="text-blue-300" size={24} />
               <h1 className="font-bold font-serif text-lg">المفتش التربوي</h1>
@@ -590,13 +592,14 @@ const App: React.FC = () => {
           </button>
       </div>
 
-      <div className="flex-1 flex gap-4 overflow-hidden relative">
+      <div className="flex-1 flex gap-4 overflow-hidden relative print:hidden">
         
         {/* SIDEBAR (Responsive) */}
         <aside className={`
             fixed inset-y-0 right-0 z-50 w-72 bg-gradient-to-br from-blue-800 to-indigo-900 text-white shadow-2xl transform transition-transform duration-300
             md:relative md:translate-x-0 md:w-64 md:rounded-3xl md:shadow-2xl md:border md:border-white/20 md:flex md:flex-col md:overflow-hidden md:shrink-0
             ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}
+            print:hidden
         `}>
           <div className="p-6 h-full flex flex-col relative overflow-hidden">
             {/* Mobile Close Button */}
@@ -697,14 +700,14 @@ const App: React.FC = () => {
             ></div>
         )}
 
-        <main className="flex-1 bg-white/95 backdrop-blur-xl md:rounded-3xl shadow-2xl flex relative overflow-hidden border border-white/20 min-w-0">
+        <main className="flex-1 bg-white/95 backdrop-blur-xl md:rounded-3xl shadow-2xl flex relative overflow-hidden border border-white/20 min-w-0 print:hidden">
             
             {/* TEACHER LIST:
                 - In Dashboard: It appears as a main block below stats (Full width).
                 - In Editor Views: It appears as a Sidebar (Fixed width).
             */}
             <div className={`
-                transition-all duration-300 flex flex-col bg-white border-l border-gray-200 z-10
+                transition-all duration-300 flex flex-col bg-white border-l border-gray-200 z-10 print:hidden
                 ${view === AppView.DASHBOARD ? 'w-full order-2 hidden' : 'w-80 h-full absolute right-0 md:static transform translate-x-full md:translate-x-0 shadow-xl md:shadow-none'}
                 ${isEditorView ? 'block' : 'hidden'} 
             `}>
@@ -724,7 +727,7 @@ const App: React.FC = () => {
             </div>
 
             {/* MAIN CONTENT AREA */}
-            <div className="flex-1 flex flex-col overflow-hidden relative w-full">
+            <div className="flex-1 flex flex-col overflow-hidden relative w-full print:hidden">
                 
                 {/* DASHBOARD SPECIFIC LAYOUT */}
                 {view === AppView.DASHBOARD && (
@@ -799,7 +802,16 @@ const App: React.FC = () => {
                 )}
                 
                 {view === AppView.QUARTERLY_REPORT && (
-                    <QuarterlyReportEditor report={currentQuarterlyReport} onChange={handleQuarterlyReportChange} onPrint={handlePrint} teachers={teachers} reportsMap={reportsMap} tenureReportsMap={tenureReportsMap} />
+                    <QuarterlyReportEditor 
+                        report={currentQuarterlyReport} 
+                        onChange={handleQuarterlyReportChange} 
+                        onPrint={handlePrint} 
+                        teachers={teachers} 
+                        reportsMap={reportsMap} 
+                        tenureReportsMap={tenureReportsMap} 
+                        signature={signature}
+                        onUploadSignature={handleSignatureUpload}
+                    />
                 )}
                 
                 {view === AppView.SEMINARS && (
