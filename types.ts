@@ -211,10 +211,10 @@ export interface QuarterlyReportData {
         arabic: number;
         math: number;
         islamic: number;
-        historyGeo: number;
+        history: number;
+        geo: number;
         civics: number;
         science: number;
-        music: number;
         art: number;
     };
 }

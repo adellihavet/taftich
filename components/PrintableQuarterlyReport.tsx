@@ -1,7 +1,6 @@
 
 import React from 'react';
 import { QuarterlyReportData } from '../types';
-import { FileDown } from 'lucide-react';
 
 interface PrintableQuarterlyReportProps {
   report: QuarterlyReportData;
@@ -10,295 +9,301 @@ interface PrintableQuarterlyReportProps {
 
 const PrintableQuarterlyReport: React.FC<PrintableQuarterlyReportProps> = ({ report, signature }) => {
     
-  const handleDownloadPDF = () => {
-      document.title = `حصيلة_${report.term}_${report.schoolYear.replace('/', '-')}`;
-      window.print();
-  };
-
-  // Calculations for Percentages
   const totalDays = Object.values(report.days).reduce((a, b) => a + b, 0);
   const totalRanks = Object.values(report.ranks).reduce((a, b) => a + b, 0);
   const totalLevels = Object.values(report.levels).reduce((a, b) => a + b, 0);
-  const totalSubjects = Object.values(report.subjects).reduce((a, b) => a + b, 0);
-
-  const title = report.term === 'السنوي' 
-    ? `حصيلة نشاطات مفتش التعليم الابتدائي للسنة الدراسية: ${report.schoolYear}`
-    : `حصيلة نشاطات مفتش التعليم الابتدائي للفصل ${report.term} من السنة الدراسية: ${report.schoolYear}`;
+  
+  const totalSubjects = (report.subjects.arabic || 0) + (report.subjects.math || 0) + (report.subjects.islamic || 0) +
+                        (report.subjects.history || 0) + (report.subjects.geo || 0) + (report.subjects.civics || 0) +
+                        (report.subjects.science || 0) + (report.subjects.art || 0);
 
   const pct = (val: number, total: number) => total === 0 ? '' : ((val / total) * 100).toFixed(1) + '%';
-
-  // Get current date formatted
   const currentDate = new Date().toLocaleDateString('ar-DZ', { year: 'numeric', month: '2-digit', day: '2-digit' });
 
   return (
-    <div className="font-serif text-black leading-normal" dir="rtl">
+    <div className="font-serif text-black leading-normal bg-white" dir="rtl">
         
-        {/* Floating Action Button (Screen Only) */}
-        <div className="fixed top-4 left-4 z-50 flex gap-3 no-print">
-            {/* Logic handled by parent */}
-        </div>
-
-        <div className="a4-page flex flex-col" style={{ padding: '8mm 12mm' }}>
+        {/* PORTRAIT A4 PAGE */}
+        <div className="a4-page-portrait flex flex-col justify-between" style={{ padding: '15mm 12mm' }}>
             
-            {/* Main Content Wrapper */}
-            <div className="flex-1 flex flex-col">
+            {/* Header Section */}
+            <div className="shrink-0 mb-6">
+                <div className="text-center font-bold text-[13px] mb-3 space-y-1">
+                    <h3>الجمهورية الجزائرية الديمقراطية الشعبية</h3>
+                    <h3>وزارة التربية الوطنية</h3>
+                </div>
                 
-                {/* Header - Updated Layout & Spacing */}
-                <div className="mb-8 shrink-0">
-                    {/* Center: Republic & Ministry */}
-                    <div className="text-center font-bold text-[13px] mb-6 space-y-1.5">
-                        <h3>الجمهورية الجزائرية الديمقراطية الشعبية</h3>
-                        <h3>وزارة التربية الوطنية</h3>
+                <div className="flex justify-between items-end border-b-2 border-black pb-1 text-[11px] font-bold">
+                    <div className="text-right">
+                        <p>المفتشية العامة للبيداغوجيا</p>
                     </div>
-                    
-                    {/* Sides: Inspectorate & Directorate */}
-                    <div className="flex justify-between items-end text-[12px] font-bold border-b-2 border-black pb-2">
-                        <div className="text-right">
-                            <p>المفتشية العامة للبيداغوجيا</p>
-                        </div>
-                        <div className="text-left">
-                            <p>مديرية التربية لولاية: {report.wilaya}</p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Title - Increased Spacing */}
-                <div className="text-center mb-10 shrink-0">
-                    <div className="inline-block border-2 border-black px-8 py-3 bg-gray-50 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
-                        <h1 className="text-xl font-bold">{title}</h1>
-                    </div>
-                </div>
-
-                {/* Content Container */}
-                <div>
-                    {/* Main Table 1: General Info */}
-                    <div className="mb-4">
-                        <table className="w-full border-collapse border border-black text-center text-[10px]">
-                            <thead>
-                                <tr>
-                                    <th rowSpan={2} className="border border-black p-1 bg-gray-100 w-[15%]">اسم المفتش ولقبه</th>
-                                    <th rowSpan={2} className="border border-black p-1 bg-gray-100">التخصص</th>
-                                    <th rowSpan={2} className="border border-black p-1 bg-gray-100">المقاطعة</th>
-                                    <th colSpan={3} className="border border-black p-1 bg-gray-100">عدد الأساتذة</th>
-                                    <th colSpan={4} className="border border-black p-1 bg-gray-100">النشاطات</th>
-                                    <th colSpan={2} className="border border-black p-1 bg-gray-100">المهام الاخرى (عددها)</th>
-                                </tr>
-                                <tr>
-                                    <th className="border border-black p-1">الاجمالي</th>
-                                    <th className="border border-black p-1">المتربصين</th>
-                                    <th className="border border-black p-1">المعنيون بالتثبيت</th>
-                                    <th className="border border-black p-1">التفتيش</th>
-                                    <th className="border border-black p-1">التثبيت</th>
-                                    <th className="border border-black p-1">التكوين</th>
-                                    <th className="border border-black p-1">الاستفادة تكوين</th>
-                                    <th className="border border-black p-1">تأطير عمليات</th>
-                                    <th className="border border-black p-1">التحقيقات</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr className="h-8 font-bold">
-                                    <td className="border border-black p-1">{report.inspectorName}</td>
-                                    <td className="border border-black p-1">{report.rank}</td>
-                                    <td className="border border-black p-1">{report.district}</td>
-                                    <td className="border border-black p-1">{report.teachersTotal}</td>
-                                    <td className="border border-black p-1">{report.teachersTrainee}</td>
-                                    <td className="border border-black p-1">{report.teachersTenure}</td>
-                                    <td className="border border-black p-1 bg-gray-50">{report.visitsInspection}</td>
-                                    <td className="border border-black p-1">{report.visitsTenure}</td>
-                                    <td className="border border-black p-1">{report.visitsTraining}</td>
-                                    <td className="border border-black p-1">{report.visitsTrainingBenefit}</td>
-                                    <td className="border border-black p-1">{report.tasksSupervision}</td>
-                                    <td className="border border-black p-1">{report.tasksInvestigations}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {/* Table 2: Distribution by Days */}
-                    <div className="mb-4">
-                        <h3 className="font-bold text-[11px] mb-1 text-right underline">1. توزيع الزيارات على الأيام:</h3>
-                        <table className="w-full border-collapse border border-black text-center text-[10px]">
-                            <thead>
-                                <tr className="bg-gray-100">
-                                    <th className="border border-black p-1 w-24">البيان</th>
-                                    <th className="border border-black p-1">الأحد</th>
-                                    <th className="border border-black p-1">الإثنين</th>
-                                    <th className="border border-black p-1">الثلاثاء</th>
-                                    <th className="border border-black p-1">الأربعاء</th>
-                                    <th className="border border-black p-1">الخميس</th>
-                                    <th className="border border-black p-1 bg-gray-200">المجموع</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td className="border border-black p-1 font-bold bg-gray-50">العدد</td>
-                                    <td className="border border-black p-1">{report.days.sun}</td>
-                                    <td className="border border-black p-1">{report.days.mon}</td>
-                                    <td className="border border-black p-1">{report.days.tue}</td>
-                                    <td className="border border-black p-1">{report.days.wed}</td>
-                                    <td className="border border-black p-1">{report.days.thu}</td>
-                                    <td className="border border-black p-1 font-bold bg-gray-50">{totalDays}</td>
-                                </tr>
-                                <tr>
-                                    <td className="border border-black p-1 font-bold bg-gray-50">النسبة %</td>
-                                    <td className="border border-black p-1">{pct(report.days.sun, totalDays)}</td>
-                                    <td className="border border-black p-1">{pct(report.days.mon, totalDays)}</td>
-                                    <td className="border border-black p-1">{pct(report.days.tue, totalDays)}</td>
-                                    <td className="border border-black p-1">{pct(report.days.wed, totalDays)}</td>
-                                    <td className="border border-black p-1">{pct(report.days.thu, totalDays)}</td>
-                                    <td className="border border-black p-1 font-bold bg-gray-50">100%</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {/* Table 3: Distribution by Rank */}
-                    <div className="mb-4">
-                        <h3 className="font-bold text-[11px] mb-1 text-right underline">2. توزيع الزيارات حسب الرتب:</h3>
-                        <table className="w-full border-collapse border border-black text-center text-[10px]">
-                            <thead>
-                                <tr className="bg-gray-100">
-                                    <th className="border border-black p-1 w-24">البيان</th>
-                                    <th className="border border-black p-1">متربص</th>
-                                    <th className="border border-black p-1">أ.م.ابتدائية</th>
-                                    <th className="border border-black p-1">رئيسي/أول</th>
-                                    <th className="border border-black p-1">مكون/ثان</th>
-                                    <th className="border border-black p-1">أستاذ مميز</th>
-                                    <th className="border border-black p-1">متعاقد</th>
-                                    <th className="border border-black p-1 bg-gray-200">المجموع</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td className="border border-black p-1 font-bold bg-gray-50">العدد</td>
-                                    <td className="border border-black p-1">{report.ranks.stagiere}</td>
-                                    <td className="border border-black p-1">{report.ranks.primary}</td>
-                                    <td className="border border-black p-1">{report.ranks.class1}</td>
-                                    <td className="border border-black p-1">{report.ranks.class2}</td>
-                                    <td className="border border-black p-1">{report.ranks.distinguished}</td>
-                                    <td className="border border-black p-1">{report.ranks.contract}</td>
-                                    <td className="border border-black p-1 font-bold bg-gray-50">{totalRanks}</td>
-                                </tr>
-                                <tr>
-                                    <td className="border border-black p-1 font-bold bg-gray-50">النسبة %</td>
-                                    <td className="border border-black p-1">{pct(report.ranks.stagiere, totalRanks)}</td>
-                                    <td className="border border-black p-1">{pct(report.ranks.primary, totalRanks)}</td>
-                                    <td className="border border-black p-1">{pct(report.ranks.class1, totalRanks)}</td>
-                                    <td className="border border-black p-1">{pct(report.ranks.class2, totalRanks)}</td>
-                                    <td className="border border-black p-1">{pct(report.ranks.distinguished, totalRanks)}</td>
-                                    <td className="border border-black p-1">{pct(report.ranks.contract, totalRanks)}</td>
-                                    <td className="border border-black p-1 font-bold bg-gray-50">100%</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {/* Table 4: Distribution by Level */}
-                    <div className="mb-4">
-                        <h3 className="font-bold text-[11px] mb-1 text-right underline">3. توزيع الزيارات حسب المستويات:</h3>
-                        <table className="w-full border-collapse border border-black text-center text-[10px]">
-                            <thead>
-                                <tr className="bg-gray-100">
-                                    <th className="border border-black p-1 w-24">البيان</th>
-                                    <th className="border border-black p-1">التحضيري</th>
-                                    <th className="border border-black p-1">السنة 01</th>
-                                    <th className="border border-black p-1">السنة 02</th>
-                                    <th className="border border-black p-1">السنة 03</th>
-                                    <th className="border border-black p-1">السنة 04</th>
-                                    <th className="border border-black p-1">السنة 05</th>
-                                    <th className="border border-black p-1 bg-gray-200">المجموع</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td className="border border-black p-1 font-bold bg-gray-50">العدد</td>
-                                    <td className="border border-black p-1">{report.levels.prep}</td>
-                                    <td className="border border-black p-1">{report.levels.year1}</td>
-                                    <td className="border border-black p-1">{report.levels.year2}</td>
-                                    <td className="border border-black p-1">{report.levels.year3}</td>
-                                    <td className="border border-black p-1">{report.levels.year4}</td>
-                                    <td className="border border-black p-1">{report.levels.year5}</td>
-                                    <td className="border border-black p-1 font-bold bg-gray-50">{totalLevels}</td>
-                                </tr>
-                                <tr>
-                                    <td className="border border-black p-1 font-bold bg-gray-50">النسبة %</td>
-                                    <td className="border border-black p-1">{pct(report.levels.prep, totalLevels)}</td>
-                                    <td className="border border-black p-1">{pct(report.levels.year1, totalLevels)}</td>
-                                    <td className="border border-black p-1">{pct(report.levels.year2, totalLevels)}</td>
-                                    <td className="border border-black p-1">{pct(report.levels.year3, totalLevels)}</td>
-                                    <td className="border border-black p-1">{pct(report.levels.year4, totalLevels)}</td>
-                                    <td className="border border-black p-1">{pct(report.levels.year5, totalLevels)}</td>
-                                    <td className="border border-black p-1 font-bold bg-gray-50">100%</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {/* Table 5: Distribution by Subject */}
-                    <div className="mb-4">
-                        <h3 className="font-bold text-[11px] mb-1 text-right underline">4. توزيع الزيارات حسب المواد (الأنشطة):</h3>
-                        <table className="w-full border-collapse border border-black text-center text-[10px]">
-                            <thead>
-                                <tr className="bg-gray-100">
-                                    <th className="border border-black p-1 w-20">البيان</th>
-                                    <th className="border border-black p-1">لغة عربية</th>
-                                    <th className="border border-black p-1">رياضيات</th>
-                                    <th className="border border-black p-1">إسلامية</th>
-                                    <th className="border border-black p-1">تاريخ/ج</th>
-                                    <th className="border border-black p-1">مدنية</th>
-                                    <th className="border border-black p-1">علمية</th>
-                                    <th className="border border-black p-1">فنية/موسيقية</th>
-                                    <th className="border border-black p-1 bg-gray-200">المجموع</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td className="border border-black p-1 font-bold bg-gray-50">العدد</td>
-                                    <td className="border border-black p-1">{report.subjects.arabic}</td>
-                                    <td className="border border-black p-1">{report.subjects.math}</td>
-                                    <td className="border border-black p-1">{report.subjects.islamic}</td>
-                                    <td className="border border-black p-1">{report.subjects.historyGeo}</td>
-                                    <td className="border border-black p-1">{report.subjects.civics}</td>
-                                    <td className="border border-black p-1">{report.subjects.science}</td>
-                                    <td className="border border-black p-1">{report.subjects.art + report.subjects.music}</td>
-                                    <td className="border border-black p-1 font-bold bg-gray-50">{totalSubjects}</td>
-                                </tr>
-                                <tr>
-                                    <td className="border border-black p-1 font-bold bg-gray-50">%</td>
-                                    <td className="border border-black p-1">{pct(report.subjects.arabic, totalSubjects)}</td>
-                                    <td className="border border-black p-1">{pct(report.subjects.math, totalSubjects)}</td>
-                                    <td className="border border-black p-1">{pct(report.subjects.islamic, totalSubjects)}</td>
-                                    <td className="border border-black p-1">{pct(report.subjects.historyGeo, totalSubjects)}</td>
-                                    <td className="border border-black p-1">{pct(report.subjects.civics, totalSubjects)}</td>
-                                    <td className="border border-black p-1">{pct(report.subjects.science, totalSubjects)}</td>
-                                    <td className="border border-black p-1">{pct(report.subjects.art + report.subjects.music, totalSubjects)}</td>
-                                    <td className="border border-black p-1 font-bold bg-gray-50">100%</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <div className="text-left">
+                        <p>مديرية التربية لولاية: {report.wilaya}</p>
                     </div>
                 </div>
             </div>
 
-            {/* Footer - Lifted Up with Padding */}
-            <div className="flex flex-col items-end px-12 text-sm font-bold shrink-0 pb-40"> {/* INCREASED PADDING TO 40 */}
+            {/* Title Section */}
+            <div className="text-center mb-8 shrink-0">
+                <div className="inline-block border-2 border-black px-6 py-2 bg-gray-50 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+                    <h1 className="text-lg font-bold flex flex-wrap items-center justify-center gap-1">
+                        <span>حصيلة نشاطات مفتش التعليم الابتدائي</span>
+                        <span>{report.term === 'السنوي' ? 'للسنة الدراسية:' : `للفصل ${report.term} من السنة الدراسية:`}</span>
+                        <span dir="ltr" className="inline-block font-mono font-bold px-1">{report.schoolYear}</span>
+                    </h1>
+                </div>
+            </div>
+
+            {/* Content Container - Use gap to distribute nicely */}
+            <div className="flex-1 flex flex-col gap-6 justify-start">
+                
+                {/* Main Table 1: General Info */}
+                <div>
+                    <table className="w-full border-collapse border border-black text-center text-[10px]">
+                        <thead>
+                            <tr className="bg-gray-100 h-8">
+                                <th rowSpan={2} className="border border-black p-1 w-[15%]">اسم المفتش ولقبه</th>
+                                <th rowSpan={2} className="border border-black p-1">التخصص</th>
+                                <th rowSpan={2} className="border border-black p-1 w-[10%]">المقاطعة</th>
+                                <th colSpan={3} className="border border-black p-1">عدد الأساتذة</th>
+                                <th colSpan={4} className="border border-black p-1 bg-gray-200">النشاطات (الزيارات المنجزة)</th>
+                                <th colSpan={2} className="border border-black p-1">المهام الاخرى (عددها)</th>
+                            </tr>
+                            <tr className="bg-gray-50 h-8">
+                                <th className="border border-black p-1">الاجمالي</th>
+                                <th className="border border-black p-1">المتربصين</th>
+                                <th className="border border-black p-1 w-[12%] text-[8px] leading-tight">المعنيون بالتثبيت <br/>(حسب مقرر التأهيل)</th>
+                                <th className="border border-black p-1">التفتيش</th>
+                                <th className="border border-black p-1">التثبيت</th>
+                                <th className="border border-black p-1">التكوين</th>
+                                <th className="border border-black p-1 text-[8px]">الاستفادة من التكوين</th>
+                                <th className="border border-black p-1">تأطير عمليات</th>
+                                <th className="border border-black p-1">التحقيقات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr className="h-10 font-bold text-[11px]">
+                                <td className="border border-black p-1">{report.inspectorName}</td>
+                                <td className="border border-black p-1">{report.rank}</td>
+                                <td className="border border-black p-1">{report.district}</td>
+                                <td className="border border-black p-1">{report.teachersTotal}</td>
+                                <td className="border border-black p-1">{report.teachersTrainee}</td>
+                                <td className="border border-black p-1">{report.teachersTenure}</td>
+                                <td className="border border-black p-1 bg-gray-100">{report.visitsInspection}</td>
+                                <td className="border border-black p-1 bg-gray-100">{report.visitsTenure}</td>
+                                <td className="border border-black p-1 bg-gray-100">{report.visitsTraining}</td>
+                                <td className="border border-black p-1 bg-gray-100">{report.visitsTrainingBenefit}</td>
+                                <td className="border border-black p-1">{report.tasksSupervision}</td>
+                                <td className="border border-black p-1">{report.tasksInvestigations}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Table 2: Days */}
+                <div>
+                    <h3 className="font-bold text-[11px] mb-1 text-right underline">* توزيع الزيارات على الأيام لكل المواد</h3>
+                    <table className="w-full border-collapse border border-black text-center text-[10px]">
+                        <thead>
+                            <tr className="bg-gray-100 h-6">
+                                <th className="border border-black p-1 w-24">البيان</th>
+                                <th className="border border-black p-1">الأحد</th>
+                                <th className="border border-black p-1">الإثنين</th>
+                                <th className="border border-black p-1">الثلاثاء</th>
+                                <th className="border border-black p-1">الأربعاء</th>
+                                <th className="border border-black p-1">الخميس</th>
+                                <th className="border border-black p-1 bg-gray-200">المجموع</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr className="h-6">
+                                <td className="border border-black p-1 font-bold bg-gray-50">العدد</td>
+                                <td className="border border-black p-1">{report.days.sun}</td>
+                                <td className="border border-black p-1">{report.days.mon}</td>
+                                <td className="border border-black p-1">{report.days.tue}</td>
+                                <td className="border border-black p-1">{report.days.wed}</td>
+                                <td className="border border-black p-1">{report.days.thu}</td>
+                                <td className="border border-black p-1 font-bold bg-gray-50">{totalDays}</td>
+                            </tr>
+                            <tr className="h-6">
+                                <td className="border border-black p-1 font-bold bg-gray-50">النسبة %</td>
+                                <td className="border border-black p-1">{pct(report.days.sun, totalDays)}</td>
+                                <td className="border border-black p-1">{pct(report.days.mon, totalDays)}</td>
+                                <td className="border border-black p-1">{pct(report.days.tue, totalDays)}</td>
+                                <td className="border border-black p-1">{pct(report.days.wed, totalDays)}</td>
+                                <td className="border border-black p-1">{pct(report.days.thu, totalDays)}</td>
+                                <td className="border border-black p-1 font-bold bg-gray-50">100%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Table 3: Ranks */}
+                <div>
+                    <h3 className="font-bold text-[11px] mb-1 text-right underline">* توزيع الزيارات حسب الرتب لكل المواد</h3>
+                    <table className="w-full border-collapse border border-black text-center text-[10px]">
+                        <thead>
+                            <tr className="bg-gray-100 h-6">
+                                <th className="border border-black p-1 w-24">البيان</th>
+                                <th className="border border-black p-1">متربص</th>
+                                <th className="border border-black p-1">أستاذ التعليم الابتدائي</th>
+                                <th className="border border-black p-1">أ قسم أول</th>
+                                <th className="border border-black p-1">أ قسم ثان</th>
+                                <th className="border border-black p-1">أستاذ مميز</th>
+                                <th className="border border-black p-1">متعاقد / مستخلف</th>
+                                <th className="border border-black p-1 bg-gray-200">المجموع</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr className="h-6">
+                                <td className="border border-black p-1 font-bold bg-gray-50">العدد</td>
+                                <td className="border border-black p-1">{report.ranks.stagiere}</td>
+                                <td className="border border-black p-1">{report.ranks.primary}</td>
+                                <td className="border border-black p-1">{report.ranks.class1}</td>
+                                <td className="border border-black p-1">{report.ranks.class2}</td>
+                                <td className="border border-black p-1">{report.ranks.distinguished}</td>
+                                <td className="border border-black p-1">{report.ranks.contract}</td>
+                                <td className="border border-black p-1 font-bold bg-gray-50">{totalRanks}</td>
+                            </tr>
+                            <tr className="h-6">
+                                <td className="border border-black p-1 font-bold bg-gray-50">النسبة %</td>
+                                <td className="border border-black p-1">{pct(report.ranks.stagiere, totalRanks)}</td>
+                                <td className="border border-black p-1">{pct(report.ranks.primary, totalRanks)}</td>
+                                <td className="border border-black p-1">{pct(report.ranks.class1, totalRanks)}</td>
+                                <td className="border border-black p-1">{pct(report.ranks.class2, totalRanks)}</td>
+                                <td className="border border-black p-1">{pct(report.ranks.distinguished, totalRanks)}</td>
+                                <td className="border border-black p-1">{pct(report.ranks.contract, totalRanks)}</td>
+                                <td className="border border-black p-1 font-bold bg-gray-50">100%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Table 4: Levels */}
+                <div>
+                    <h3 className="font-bold text-[11px] mb-1 text-right underline">* توزيع الزيارات التفتيشية والتوجيهية ... حسب المستويات لكل المواد</h3>
+                    <table className="w-full border-collapse border border-black text-center text-[10px]">
+                        <thead>
+                            <tr className="bg-gray-100 h-6">
+                                <th className="border border-black p-1 w-24">المستويات</th>
+                                <th className="border border-black p-1">التحضيري</th>
+                                <th className="border border-black p-1">السنة 01</th>
+                                <th className="border border-black p-1">السنة 02</th>
+                                <th className="border border-black p-1">السنة 03</th>
+                                <th className="border border-black p-1">السنة 04</th>
+                                <th className="border border-black p-1">السنة 05</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr className="h-6">
+                                <td className="border border-black p-1 font-bold bg-gray-50">العدد</td>
+                                <td className="border border-black p-1">{report.levels.prep}</td>
+                                <td className="border border-black p-1">{report.levels.year1}</td>
+                                <td className="border border-black p-1">{report.levels.year2}</td>
+                                <td className="border border-black p-1">{report.levels.year3}</td>
+                                <td className="border border-black p-1">{report.levels.year4}</td>
+                                <td className="border border-black p-1">{report.levels.year5}</td>
+                            </tr>
+                            <tr className="h-6">
+                                <td className="border border-black p-1 font-bold bg-gray-50">النسبة المئوية</td>
+                                <td className="border border-black p-1">{pct(report.levels.prep, totalLevels)}</td>
+                                <td className="border border-black p-1">{pct(report.levels.year1, totalLevels)}</td>
+                                <td className="border border-black p-1">{pct(report.levels.year2, totalLevels)}</td>
+                                <td className="border border-black p-1">{pct(report.levels.year3, totalLevels)}</td>
+                                <td className="border border-black p-1">{pct(report.levels.year4, totalLevels)}</td>
+                                <td className="border border-black p-1">{pct(report.levels.year5, totalLevels)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Table 5: Subjects */}
+                <div>
+                    <h3 className="font-bold text-[11px] mb-1 text-right underline">* توزيع الزيارات على المواد</h3>
+                    <table className="w-full border-collapse border border-black text-center text-[10px]">
+                        <thead>
+                            <tr className="bg-gray-100 h-6">
+                                <th className="border border-black p-1 w-24">البيان</th>
+                                <th className="border border-black p-1">اللغة العربية</th>
+                                <th className="border border-black p-1">رياضيات</th>
+                                <th className="border border-black p-1">ت. إسلامية</th>
+                                <th className="border border-black p-1">تاريــخ</th>
+                                <th className="border border-black p-1">جغرافيا</th>
+                                <th className="border border-black p-1">ت. مدنية</th>
+                                <th className="border border-black p-1">ت. علمية</th>
+                                <th className="border border-black p-1">ت. فنية</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr className="h-6">
+                                <td className="border border-black p-1 font-bold bg-gray-50">العدد</td>
+                                <td className="border border-black p-1">{report.subjects.arabic}</td>
+                                <td className="border border-black p-1">{report.subjects.math}</td>
+                                <td className="border border-black p-1">{report.subjects.islamic}</td>
+                                <td className="border border-black p-1">{report.subjects.history}</td>
+                                <td className="border border-black p-1">{report.subjects.geo}</td>
+                                <td className="border border-black p-1">{report.subjects.civics}</td>
+                                <td className="border border-black p-1">{report.subjects.science}</td>
+                                <td className="border border-black p-1">{report.subjects.art}</td>
+                            </tr>
+                            <tr className="h-6">
+                                <td className="border border-black p-1 font-bold bg-gray-50">النسبة المئوية</td>
+                                <td className="border border-black p-1">{pct(report.subjects.arabic, totalSubjects)}</td>
+                                <td className="border border-black p-1">{pct(report.subjects.math, totalSubjects)}</td>
+                                <td className="border border-black p-1">{pct(report.subjects.islamic, totalSubjects)}</td>
+                                <td className="border border-black p-1">{pct(report.subjects.history, totalSubjects)}</td>
+                                <td className="border border-black p-1">{pct(report.subjects.geo, totalSubjects)}</td>
+                                <td className="border border-black p-1">{pct(report.subjects.civics, totalSubjects)}</td>
+                                <td className="border border-black p-1">{pct(report.subjects.science, totalSubjects)}</td>
+                                <td className="border border-black p-1">{pct(report.subjects.art, totalSubjects)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Footer - Pushed to bottom properly */}
+            <div className="flex flex-col items-end px-8 text-sm font-bold shrink-0 mt-8 mb-4">
                  <p className="mb-4">حرر بـ: {report.wilaya} في: {currentDate}</p>
-                 <div className="text-center w-48 relative flex flex-col items-center">
-                    <p className="mb-8 underline">مفتش التعليم الابتدائي</p>
+                 <div className="text-center w-64 relative flex flex-col items-center">
+                    <p className="mb-10 underline">مفتش التعليم الابتدائي</p>
                     
-                    {signature ? (
-                        <div className="absolute top-8 left-1/2 transform -translate-x-1/2 w-64 h-32 flex items-center justify-center pointer-events-none z-10">
-                            <img src={signature} alt="Signature" className="w-full h-full mix-blend-multiply object-contain transform -rotate-2 scale-125" />
-                        </div>
-                    ) : (
-                        <div className="mt-2 text-[10px] text-gray-300 border border-dashed border-gray-300 w-20 h-20 rounded-full flex items-center justify-center rotate-[-15deg]">
-                            الختم
-                        </div>
-                    )}
+                    {/* Signature Container */}
+                    <div className="h-24 w-full relative flex items-center justify-center">
+                        {signature && (
+                            <img src={signature} alt="Signature" className="absolute w-full h-full object-contain mix-blend-multiply transform scale-125 -rotate-2 top-0" />
+                        )}
+                    </div>
                  </div>
             </div>
 
         </div>
+        
+        <style>{`
+            @media print {
+                @page { 
+                    size: portrait;
+                    margin: 0;
+                }
+                .a4-page-portrait {
+                    width: 210mm;
+                    height: 297mm;
+                    margin: 0 auto;
+                    background: white;
+                    page-break-inside: avoid;
+                    overflow: hidden;
+                }
+            }
+            @media screen {
+                .a4-page-portrait {
+                    width: 210mm;
+                    height: 297mm;
+                    margin: 20px auto;
+                    background: white;
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+                }
+            }
+        `}</style>
     </div>
   );
 };

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useMemo } from 'react';
-import { Upload, Save, Check, ArrowLeftRight, School, Users, FileSpreadsheet, AlertTriangle, BarChart2, Layers, BookOpen, Filter, Trash2, PieChart, Database, Download, FileJson, RefreshCcw } from 'lucide-react';
+import { Upload, Save, Check, ArrowLeftRight, School, Users, FileSpreadsheet, AlertTriangle, BarChart2, Layers, BookOpen, Filter, Trash2, PieChart, Database, Download, FileJson, RefreshCcw, Map, Info } from 'lucide-react';
 import { AcqStudent, AcqClassRecord, AcqFilterState } from '../../types/acquisitions';
 import { parseAcqExcel } from '../../utils/acqParser';
 import { saveAcqRecord, getAcqDB, deleteAcqRecord } from '../../services/acqStorage';
@@ -10,6 +10,7 @@ interface AcqManagerProps {
     availableSchools: string[];
     onDataUpdated?: () => void;
     externalFilters: AcqFilterState; // Passed from App state
+    onUpdateFilters: (updates: Partial<AcqFilterState>) => void; // New prop to update parent state
 }
 
 // Configuration for Subjects per Level
@@ -23,9 +24,8 @@ const LEVEL_SUBJECTS: Record<string, string[]> = {
     ]
 };
 
-const AcqManager: React.FC<AcqManagerProps> = ({ availableSchools, onDataUpdated, externalFilters }) => {
+const AcqManager: React.FC<AcqManagerProps> = ({ availableSchools, onDataUpdated, externalFilters, onUpdateFilters }) => {
     // Main View State: 'data' (Upload/List) or 'stats' (Dashboard)
-    // Default to 'stats' if we have data, else 'data'
     const [mainView, setMainView] = useState<'data' | 'stats'>('stats');
     const [dataSubView, setDataSubView] = useState<'list' | 'upload'>('list');
     
@@ -47,13 +47,52 @@ const AcqManager: React.FC<AcqManagerProps> = ({ availableSchools, onDataUpdated
         return LEVEL_SUBJECTS[selectedLevel] || [];
     }, [selectedLevel]);
 
+    // --- FILTER LOGIC (Moved from Sidebar) ---
+    const activeLevels = useMemo(() => {
+        const levels = new Set<string>();
+        records.forEach(r => {
+            if (externalFilters.scope === 'district' || r.schoolName === externalFilters.selectedSchool) {
+                levels.add(r.level);
+            }
+        });
+        return Array.from(levels).sort();
+    }, [records, externalFilters.scope, externalFilters.selectedSchool]);
+
+    const activeClasses = useMemo(() => {
+        if (externalFilters.scope !== 'class' || !externalFilters.selectedSchool || !externalFilters.selectedLevel) return [];
+        const classes = new Set<string>();
+        records.forEach(r => {
+            if (r.schoolName === externalFilters.selectedSchool && r.level === externalFilters.selectedLevel) {
+                classes.add(r.className);
+            }
+        });
+        return Array.from(classes).sort();
+    }, [records, externalFilters.scope, externalFilters.selectedSchool, externalFilters.selectedLevel]);
+
+    const activeSubjects = useMemo(() => {
+        if (!externalFilters.selectedLevel) return [];
+        const subjects = new Set<string>();
+        records.forEach(r => {
+            if (r.level === externalFilters.selectedLevel) {
+                if (externalFilters.scope === 'district') {
+                    subjects.add(r.subject);
+                } else if (externalFilters.selectedSchool && r.schoolName === externalFilters.selectedSchool) {
+                    subjects.add(r.subject);
+                }
+            }
+        });
+        return Array.from(subjects).sort();
+    }, [records, externalFilters.scope, externalFilters.selectedSchool, externalFilters.selectedLevel]);
+
+
     // --- EXCEL PARSING ---
     const handleFileRead = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        if (!selectedLevel || !selectedSubject) {
-            alert("يرجى اختيار المستوى والمادة قبل رفع الملف لضمان قراءة البيانات بشكل صحيح.");
+        // Validation: Ensure Context is Selected BEFORE processing
+        if (!selectedSchool || !selectedLevel || !selectedSubject) {
+            alert("تنبيه: يجب اختيار المدرسة، المستوى، والمادة أولاً لضمان توجيه البيانات بشكل صحيح.");
             if (fileInputRef.current) fileInputRef.current.value = '';
             return;
         }
@@ -78,15 +117,25 @@ const AcqManager: React.FC<AcqManagerProps> = ({ availableSchools, onDataUpdated
 
     // --- SAVE RECORD ---
     const handleSave = () => {
-        if (!selectedSchool || !selectedLevel || !selectedSubject || !className || previewStudents.length === 0) {
-            alert("يرجى إكمال جميع الحقول ورفع ملف يحتوي على بيانات.");
+        // Strict Validation for Context Fields
+        if (!selectedSchool || !selectedLevel || !selectedSubject || previewStudents.length === 0) {
+            alert("يرجى إكمال الحقول الإجبارية (المدرسة، المستوى، المادة) ورفع ملف يحتوي على بيانات.");
             return;
+        }
+
+        // Warning for Class Name (Optional but Recommended)
+        let finalClassName = className.trim();
+        if (!finalClassName) {
+            if (!confirm("تنبيه: لم تقم بتسمية الفوج (مثلاً: 2أ أو الفوج 1).\n\nإذا كانت المدرسة تحتوي على أكثر من فوج في هذا المستوى، فقد تختلط البيانات.\nهل تريد المتابعة وحفظه بدون اسم؟")) {
+                return; // User Cancelled
+            }
+            finalClassName = "فوج بدون اسم";
         }
 
         const newRecord: AcqClassRecord = {
             id: Math.random().toString(36).substr(2, 9),
             schoolName: selectedSchool,
-            className: className,
+            className: finalClassName,
             level: selectedLevel,
             subject: selectedSubject,
             academicYear: `${new Date().getFullYear()}/${new Date().getFullYear() + 1}`,
@@ -101,9 +150,11 @@ const AcqManager: React.FC<AcqManagerProps> = ({ availableSchools, onDataUpdated
         // Notify Parent to update sidebar logic
         if (onDataUpdated) onDataUpdated();
         
+        // Reset Form
         setClassName('');
         setPreviewStudents([]);
         setFileName('');
+        // Keep School/Level selected for easier consecutive uploads
     };
 
     // --- DELETE RECORD ---
@@ -162,13 +213,13 @@ const AcqManager: React.FC<AcqManagerProps> = ({ availableSchools, onDataUpdated
     return (
         <div className="h-full flex flex-col bg-slate-50/50 w-full animate-in fade-in">
             {/* Top Navigation Bar */}
-            <div className="bg-white border-b px-6 py-3 flex justify-between items-center sticky top-0 z-20 shadow-sm">
+            <div className="bg-white border-b px-6 py-3 flex flex-col md:flex-row justify-between items-start md:items-center sticky top-0 z-20 shadow-sm gap-4">
                 <div className="flex items-center gap-4">
                     <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2 font-serif">
                         <BarChart2 className="text-teal-600" size={24} />
                         فضاء تقييم المكتسبات
                     </h1>
-                    <div className="h-6 w-px bg-slate-200 mx-2"></div>
+                    <div className="h-6 w-px bg-slate-200 mx-2 hidden md:block"></div>
                     <div className="flex bg-slate-100 p-1 rounded-lg">
                         <button 
                             onClick={() => setMainView('data')}
@@ -187,6 +238,105 @@ const AcqManager: React.FC<AcqManagerProps> = ({ availableSchools, onDataUpdated
                     </div>
                 </div>
             </div>
+
+            {/* --- NEW: TOP FILTER BAR (Replaces Sidebar) --- */}
+            {mainView === 'stats' && (
+                <div className="bg-slate-50 border-b border-slate-200 px-6 py-3 flex flex-col lg:flex-row gap-4 items-start lg:items-center animate-in slide-in-from-top-2 relative z-10">
+                    
+                    {/* Scope Switcher */}
+                    <div className="flex bg-white rounded-lg border border-slate-200 shadow-sm p-1 shrink-0">
+                        <button 
+                            onClick={() => onUpdateFilters({ scope: 'district', selectedSchool: '', selectedClass: '', selectedSubject: '' })}
+                            className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all ${externalFilters.scope === 'district' ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200' : 'text-slate-500 hover:bg-slate-50'}`}
+                        >
+                            <Map size={14} />
+                            <span>المقاطعة</span>
+                        </button>
+                        <div className="w-px bg-slate-200 my-1 mx-1"></div>
+                        <button 
+                            onClick={() => onUpdateFilters({ scope: 'school', selectedClass: '', selectedSubject: '' })}
+                            className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all ${externalFilters.scope === 'school' ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-200' : 'text-slate-500 hover:bg-slate-50'}`}
+                        >
+                            <School size={14} />
+                            <span>المدرسة</span>
+                        </button>
+                        <div className="w-px bg-slate-200 my-1 mx-1"></div>
+                        <button 
+                            onClick={() => onUpdateFilters({ scope: 'class', selectedSubject: '' })}
+                            className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all ${externalFilters.scope === 'class' ? 'bg-teal-50 text-teal-700 ring-1 ring-teal-200' : 'text-slate-500 hover:bg-slate-50'}`}
+                        >
+                            <Users size={14} />
+                            <span>القسم</span>
+                        </button>
+                    </div>
+
+                    {/* Filters Row */}
+                    <div className="flex flex-wrap gap-3 items-center flex-1">
+                        
+                        {/* School */}
+                        <div className={`relative min-w-[200px] ${externalFilters.scope === 'district' ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
+                            <School size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                            <select 
+                                value={externalFilters.selectedSchool}
+                                onChange={(e) => onUpdateFilters({ selectedSchool: e.target.value, selectedLevel: '', selectedSubject: '', selectedClass: '' })}
+                                className="w-full py-2 pr-9 pl-3 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm appearance-none"
+                            >
+                                <option value="">{externalFilters.scope === 'district' ? 'تحليل شامل للمقاطعة' : '-- اختر المدرسة --'}</option>
+                                {availableSchools.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+
+                        {/* Level */}
+                        <div className="relative min-w-[160px]">
+                            <Layers size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                            <select 
+                                value={externalFilters.selectedLevel}
+                                onChange={(e) => onUpdateFilters({ selectedLevel: e.target.value, selectedSubject: '' })}
+                                className="w-full py-2 pr-9 pl-3 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm appearance-none"
+                            >
+                                <option value="">-- المستوى الدراسي --</option>
+                                {activeLevels.map(l => <option key={l} value={l}>{l}</option>)}
+                            </select>
+                        </div>
+
+                        {/* Class (Conditional) */}
+                        {externalFilters.scope === 'class' && (
+                            <div className="relative min-w-[140px] animate-in fade-in slide-in-from-right-2">
+                                <Users size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                <select 
+                                    value={externalFilters.selectedClass}
+                                    onChange={(e) => onUpdateFilters({ selectedClass: e.target.value, selectedSubject: '' })}
+                                    className="w-full py-2 pr-9 pl-3 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm appearance-none"
+                                >
+                                    <option value="">-- الفوج --</option>
+                                    {activeClasses.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                        )}
+
+                        {/* Subject */}
+                        <div className={`relative min-w-[180px] ${!externalFilters.selectedLevel ? 'opacity-50 pointer-events-none' : ''}`}>
+                            <BookOpen size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                            <select 
+                                value={externalFilters.selectedSubject}
+                                onChange={(e) => onUpdateFilters({ selectedSubject: e.target.value })}
+                                className="w-full py-2 pr-9 pl-3 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm appearance-none"
+                            >
+                                <option value="">-- المادة / النشاط --</option>
+                                {activeSubjects.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Status Indicator */}
+                    <div className="hidden lg:block">
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold border ${externalFilters.selectedSubject ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                            <div className={`w-1.5 h-1.5 rounded-full ${externalFilters.selectedSubject ? 'bg-green-500 animate-pulse' : 'bg-slate-400'}`}></div>
+                            {externalFilters.selectedSubject ? 'جاهز للعرض' : 'بانتظار الاختيار'}
+                        </span>
+                    </div>
+                </div>
+            )}
 
             <div className="flex-1 overflow-hidden">
                 {/* --- VIEW: STATS DASHBOARD --- */}
@@ -307,7 +457,7 @@ const AcqManager: React.FC<AcqManagerProps> = ({ availableSchools, onDataUpdated
                                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                                             <div className="md:col-span-1">
                                                 <label className="block text-xs font-bold text-slate-600 mb-2 flex items-center gap-1">
-                                                    <School size={14} /> المدرسة
+                                                    <School size={14} className="text-teal-600" /> المدرسة <span className="text-red-500">*</span>
                                                 </label>
                                                 <select 
                                                     value={selectedSchool} 
@@ -321,7 +471,7 @@ const AcqManager: React.FC<AcqManagerProps> = ({ availableSchools, onDataUpdated
 
                                             <div className="md:col-span-1">
                                                 <label className="block text-xs font-bold text-slate-600 mb-2 flex items-center gap-1">
-                                                    <Layers size={14} /> المستوى
+                                                    <Layers size={14} className="text-teal-600" /> المستوى <span className="text-red-500">*</span>
                                                 </label>
                                                 <select 
                                                     value={selectedLevel} 
@@ -342,7 +492,7 @@ const AcqManager: React.FC<AcqManagerProps> = ({ availableSchools, onDataUpdated
 
                                             <div className="md:col-span-1">
                                                 <label className="block text-xs font-bold text-slate-600 mb-2 flex items-center gap-1">
-                                                    <BookOpen size={14} /> المادة
+                                                    <BookOpen size={14} className="text-teal-600" /> المادة <span className="text-red-500">*</span>
                                                 </label>
                                                 <select 
                                                     value={selectedSubject} 
@@ -361,7 +511,7 @@ const AcqManager: React.FC<AcqManagerProps> = ({ availableSchools, onDataUpdated
 
                                             <div className="md:col-span-1">
                                                 <label className="block text-xs font-bold text-slate-600 mb-2 flex items-center gap-1">
-                                                    <Users size={14} /> الفوج
+                                                    <Users size={14} className="text-teal-600" /> الفوج
                                                 </label>
                                                 <input 
                                                     type="text" 
@@ -370,17 +520,24 @@ const AcqManager: React.FC<AcqManagerProps> = ({ availableSchools, onDataUpdated
                                                     placeholder="مثلاً: 2أ"
                                                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none font-bold text-slate-700"
                                                 />
+                                                <div className="flex items-start gap-1 mt-1 text-[10px] text-slate-400 leading-tight">
+                                                    <Info size={10} className="mt-0.5 shrink-0" />
+                                                    <span>يجب تعيين الرقم إذا كانت المدرسة بها أكثر من فوج في نفس المستوى.</span>
+                                                </div>
                                             </div>
                                         </div>
 
                                         {/* 2. File Upload */}
                                         <div 
                                             onClick={() => {
-                                                if (!selectedSubject) alert("اختر المستوى والمادة أولاً");
-                                                else fileInputRef.current?.click();
+                                                if (!selectedSchool || !selectedLevel || !selectedSubject) {
+                                                    alert("تنبيه: يجب اختيار المدرسة، المستوى، والمادة أولاً لضمان توجيه البيانات بشكل صحيح.");
+                                                } else {
+                                                    fileInputRef.current?.click();
+                                                }
                                             }}
                                             className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer relative
-                                                ${!selectedSubject ? 'opacity-50 border-slate-200 bg-slate-50' : 
+                                                ${(!selectedSchool || !selectedLevel || !selectedSubject) ? 'opacity-50 border-slate-200 bg-slate-50 cursor-not-allowed' : 
                                                 fileName ? 'border-teal-400 bg-teal-50' : 'border-slate-300 hover:border-teal-400 hover:bg-slate-50'}
                                             `}
                                         >
@@ -390,7 +547,7 @@ const AcqManager: React.FC<AcqManagerProps> = ({ availableSchools, onDataUpdated
                                                 accept=".xls,.xlsx"
                                                 onChange={handleFileRead}
                                                 className="hidden" 
-                                                disabled={!selectedSubject}
+                                                disabled={!selectedSchool || !selectedLevel || !selectedSubject}
                                             />
                                             
                                             <div className="flex flex-col items-center">
@@ -407,7 +564,12 @@ const AcqManager: React.FC<AcqManagerProps> = ({ availableSchools, onDataUpdated
                                                 ) : (
                                                     <>
                                                         <h3 className="font-bold text-slate-700 text-sm">اضغط هنا لرفع ملف Excel</h3>
-                                                        <p className="text-slate-400 text-xs mt-1">يجب أن يطابق الملف: {selectedLevel || '...'} - {selectedSubject || '...'}</p>
+                                                        <p className="text-slate-400 text-xs mt-1">
+                                                            {(!selectedSchool || !selectedLevel || !selectedSubject) 
+                                                                ? "يرجى تحديد المدرسة والمستوى والمادة أولاً"
+                                                                : `يجب أن يطابق الملف: ${selectedLevel} - ${selectedSubject}`
+                                                            }
+                                                        </p>
                                                     </>
                                                 )}
                                             </div>

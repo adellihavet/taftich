@@ -244,7 +244,7 @@ const AcqYear2ArabicStats: React.FC<Props> = ({ records, scope, contextName }) =
     const showHomogeneityInsight = () => {
         setActiveInsight({
             title: "مؤشر التجانس داخل القسم",
-            definition: "مقياس يحدد مدى تقارب أو تباعد مستويات التلاميذ داخل الفوج. كلما كان الرقم صغيراً، كان القسم متجانساً.",
+            definition: "مقياس يحدد مدى تقارب أو تباعد مستويات التلاميذ. كلما كان الرقم صغيراً، كان القسم متجانساً.",
             pedagogicalRef: "يستند إلى 'بيداغوجيا الفوارق'. إذا كان التشتت كبيراً، فإن الدرس الموحد سيظلم فئة على حساب أخرى. التجانس يسهل المهمة، والتشتت يفرض التفويج.",
             content: (
                 <div className="space-y-4">

@@ -198,7 +198,7 @@ const SendingSchedule: React.FC<SendingScheduleProps> = ({
                 <div className="text-center font-bold text-sm w-1/3">
                     <p className="mb-8">{wilaya} في: {new Date().toLocaleDateString('ar-DZ')}</p>
                     <p className="mb-2">مفتش المقاطعة</p>
-                    <p className="text-xs text-gray-400 mt-8">(الختم والإمضاء)</p>
+                    <p className="text-xs text-gray-400 mt-8"></p>
                 </div>
             </div>
         </div>

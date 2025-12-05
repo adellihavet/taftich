@@ -22,7 +22,7 @@ import { supabase, isSupabaseConfigured, fetchScriptUrlFromCloud } from './servi
 import { Teacher, ReportData, TenureReportData, QuarterlyReportData, AppView, LibraryLink } from './types';
 import { AcqFilterState } from './types/acquisitions';
 import { MOCK_TEACHERS, INITIAL_REPORT_STATE, INITIAL_TENURE_REPORT_STATE, INITIAL_QUARTERLY_REPORT_STATE } from './constants';
-import { Database, LayoutDashboard, ArrowUpCircle, PenLine, LogOut, UserCircle2, Hexagon, PieChart, Cloud, RefreshCcw, AlertCircle, BarChart2, Presentation, Briefcase, Menu, X } from 'lucide-react';
+import { Database, LayoutDashboard, ArrowUpCircle, PenLine, LogOut, UserCircle2, Hexagon, PieChart, Cloud, RefreshCcw, AlertCircle, BarChart2, Presentation, Briefcase, Menu, X, Stamp } from 'lucide-react';
 import { syncWithScript } from './services/sheetsService';
 import { generateDatabaseRows } from './utils/sheetHelper';
 import { getAcqDB } from './services/acqStorage';
@@ -44,6 +44,8 @@ const App: React.FC = () => {
   const [inspectorName, setInspectorName] = useState('');
   const [isEditingInspector, setIsEditingInspector] = useState(false);
   const [signature, setSignature] = useState<string | undefined>(undefined);
+  // NEW: Global Toggle for Signature Visibility
+  const [showSignature, setShowSignature] = useState<boolean>(true);
 
   const [currentReport, setCurrentReport] = useState<ReportData>(INITIAL_REPORT_STATE);
   const [reportsMap, setReportsMap] = useState<Record<string, ReportData>>({});
@@ -83,12 +85,24 @@ const App: React.FC = () => {
       return Array.from(schools).sort();
   }, [reportsMap]);
 
+  // COMBINED SCHOOLS LIST FOR ACQUISITIONS (Main DB + Acq Records)
   const acqAvailableSchools = useMemo(() => {
-      const db = getAcqDB();
       const schools = new Set<string>();
+      
+      // 1. Add schools from existing Acquisition records
+      const db = getAcqDB();
       db.records.forEach(r => schools.add(r.schoolName));
+
+      // 2. Add schools from the Main Database (Reports Map)
+      // This ensures the dropdown includes all schools defined in the Google Sheet / Database
+      Object.values(reportsMap).forEach(r => { 
+          if(r.school && r.school.trim() !== '') {
+              schools.add(r.school.trim()); 
+          }
+      });
+
       return Array.from(schools).sort();
-  }, [acqRefreshKey, view]); 
+  }, [acqRefreshKey, view, reportsMap]); 
 
   const availableLevels = useMemo(() => {
       const levels = new Set<string>();
@@ -138,13 +152,14 @@ const App: React.FC = () => {
           // If report exists AND has a date AND has a mark
           if (report && report.inspectionDate && report.finalMark > 0) {
               const reportDate = new Date(report.inspectionDate);
-              if (!isNaN(reportDate.getTime())) {
+              if (!isNaN(reportDate.getTime()) && t.lastInspectionDate !== report.inspectionDate) {
                   // Calculate diff in days
                   const diffTime = Math.abs(today.getTime() - reportDate.getTime());
                   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
 
-                  // Condition: More than 30 days passed AND the teacher record isn't already updated to this date
-                  if (diffDays > 30 && t.lastInspectionDate !== report.inspectionDate) {
+                  // Condition: More than 30 days passed since previous value or just update if new
+                  // Here simplified: if report is newer/different, update teacher profile
+                  if (diffDays < 365) { // Sanity check: don't auto update if date is ancient
                       updatedCount++;
                       return {
                           ...t,
@@ -159,9 +174,9 @@ const App: React.FC = () => {
 
       if (updatedCount > 0) {
           setTeachers(newTeachers);
-          console.log(`Updated ${updatedCount} teacher records automatically (30-day rule).`);
+          console.log(`Updated ${updatedCount} teacher records automatically.`);
       }
-  }, [reportsMap]); // Run when reports change (or on load if reports loaded)
+  }, [reportsMap]); 
 
   // --- INITIALIZATION ---
   useEffect(() => {
@@ -171,7 +186,6 @@ const App: React.FC = () => {
             setLoadingSession(false);
             
             if (session?.user) {
-                // Ensure function exists before calling
                 if (typeof fetchScriptUrlFromCloud === 'function') {
                     fetchScriptUrlFromCloud().then(url => {
                         if (url) {
@@ -217,6 +231,7 @@ const App: React.FC = () => {
     const savedMembership = localStorage.getItem('mufattish_is_gold');
     const savedInspectorName = localStorage.getItem('mufattish_inspector_name');
     const savedSignature = localStorage.getItem('mufattish_signature');
+    const savedShowSignature = localStorage.getItem('mufattish_show_signature');
 
     if (savedTeachers) try { setTeachers(JSON.parse(savedTeachers)); } catch(e) {}
     if (savedReports) try { setReportsMap(JSON.parse(savedReports)); } catch(e) {}
@@ -225,6 +240,7 @@ const App: React.FC = () => {
     if (savedMembership === 'true') setIsGoldMember(true);
     if (savedInspectorName) setInspectorName(savedInspectorName);
     if (savedSignature) setSignature(savedSignature);
+    if (savedShowSignature !== null) setShowSignature(savedShowSignature === 'true');
 
     const scriptUrl = localStorage.getItem('mufattish_script_url');
     if (scriptUrl) {
@@ -239,6 +255,7 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('mufattish_quarterly_report', JSON.stringify(currentQuarterlyReport)); }, [currentQuarterlyReport]);
   useEffect(() => { localStorage.setItem('mufattish_is_gold', isGoldMember.toString()); }, [isGoldMember]);
   useEffect(() => { localStorage.setItem('mufattish_inspector_name', inspectorName); }, [inspectorName]);
+  useEffect(() => { localStorage.setItem('mufattish_show_signature', String(showSignature)); }, [showSignature]);
 
   // --- GOOGLE SYNC LOGIC ---
   useEffect(() => {
@@ -247,7 +264,6 @@ const App: React.FC = () => {
           return;
       }
 
-      // GUARD: Don't sync if teachers list is empty. This prevents wiping the sheet on init.
       if (!autoSyncEnabled || !isGoogleConnected || teachers.length === 0) return;
 
       const scriptUrl = localStorage.getItem('mufattish_script_url');
@@ -349,9 +365,9 @@ const App: React.FC = () => {
   const handleOpenQuarterlyReport = () => {
       setCurrentQuarterlyReport(prev => ({
           ...prev,
-          inspectorName: prev.inspectorName || inspectorName,
-          wilaya: prev.wilaya || currentReport.wilaya || derivedGlobalData.wilaya, 
-          district: prev.district || currentReport.district || derivedGlobalData.district,
+          inspectorName: inspectorName, 
+          wilaya: derivedGlobalData.wilaya, 
+          district: derivedGlobalData.district, 
           teachersTotal: teachers.length,
           teachersTrainee: teachers.filter(t => t.status === 'stagiere').length,
       }));
@@ -519,6 +535,7 @@ const App: React.FC = () => {
         reader.onloadend = () => {
             const base64String = reader.result as string;
             setSignature(base64String);
+            setShowSignature(true); // Auto-enable on new upload
             localStorage.setItem('mufattish_signature', base64String);
         };
         reader.readAsDataURL(file);
@@ -527,7 +544,11 @@ const App: React.FC = () => {
 
   const NavButton = ({ targetView, icon: Icon, label }: { targetView: AppView, icon: any, label: string }) => (
       <button 
-        onClick={() => { setView(targetView); setIsSidebarOpen(false); }} 
+        onClick={() => { 
+            if (targetView === AppView.QUARTERLY_REPORT) handleOpenQuarterlyReport(); 
+            else setView(targetView); 
+            setIsSidebarOpen(false); 
+        }} 
         className={`flex-1 min-w-[40px] md:w-full p-2 rounded-lg transition-all flex items-center justify-center md:justify-start gap-3 ${view === targetView ? 'bg-white text-blue-800 shadow-sm' : 'hover:bg-white/10 text-blue-100'}`} 
         title={label}
       >
@@ -535,6 +556,9 @@ const App: React.FC = () => {
           <span className="hidden md:inline text-sm font-medium">{label}</span>
       </button>
   );
+
+  // --- EFFECTIVE SIGNATURE (Conditionally passed to prints) ---
+  const effectiveSignature = showSignature ? signature : undefined;
 
   if (loadingSession) {
       return (
@@ -572,13 +596,13 @@ const App: React.FC = () => {
         />
       </div>
       
-      {/* Printable Views (Hidden on Screen) */}
+      {/* Printable Views (Hidden on Screen) - Using EFFECTIVE SIGNATURE */}
       <div className="hidden print:block">
-        {selectedTeacher && view === AppView.EDITOR && <PrintableReport report={currentReport} teacher={selectedTeacher} signature={signature} />}
-        {selectedTeacher && view === AppView.LEGACY_EDITOR && <PrintableLegacyReport report={currentReport} teacher={selectedTeacher} signature={signature} />}
-        {selectedTeacher && view === AppView.TENURE_EDITOR && <PrintableTenureReport report={currentTenureReport} teacher={selectedTeacher} signature={signature} />}
+        {selectedTeacher && view === AppView.EDITOR && <PrintableReport report={currentReport} teacher={selectedTeacher} signature={effectiveSignature} />}
+        {selectedTeacher && view === AppView.LEGACY_EDITOR && <PrintableLegacyReport report={currentReport} teacher={selectedTeacher} signature={effectiveSignature} />}
+        {selectedTeacher && view === AppView.TENURE_EDITOR && <PrintableTenureReport report={currentTenureReport} teacher={selectedTeacher} signature={effectiveSignature} />}
         {view === AppView.PROMOTIONS && <PromotionList teachers={filteredTeachers} reportsMap={reportsMap} />}
-        {view === AppView.QUARTERLY_REPORT && <PrintableQuarterlyReport report={currentQuarterlyReport} signature={signature} />}
+        {view === AppView.QUARTERLY_REPORT && <PrintableQuarterlyReport report={currentQuarterlyReport} signature={effectiveSignature} />}
       </div>
 
       {/* Mobile Header (Visible only on small screens) */}
@@ -644,7 +668,7 @@ const App: React.FC = () => {
                     </div>
                 )}
 
-                {/* Inspector Name Input */}
+                {/* Inspector Name & Signature Controls */}
                 <div className="bg-blue-900/40 p-3 rounded-xl border border-blue-400/30 backdrop-blur-md mt-2">
                     <label className="text-[10px] text-blue-200 font-bold block mb-1 uppercase tracking-wider">اسم المفتش (للتوقيع)</label>
                     <div className="flex items-center gap-2">
@@ -668,6 +692,23 @@ const App: React.FC = () => {
                             </div>
                         )}
                     </div>
+                    
+                    {/* GLOBAL SIGNATURE TOGGLE */}
+                    {signature && (
+                        <div className="mt-3 pt-2 border-t border-blue-800/50 flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 text-blue-200">
+                                <Stamp size={12} className="text-blue-400"/>
+                                <span className="text-[10px] font-bold">إظهار الختم في الطباعة</span>
+                            </div>
+                            <button 
+                                onClick={() => setShowSignature(!showSignature)}
+                                className={`w-8 h-4 rounded-full relative transition-colors duration-300 ${showSignature ? 'bg-blue-400' : 'bg-slate-600/50'}`}
+                                title="تفعيل/تعطيل ظهور الختم"
+                            >
+                                <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all duration-300 shadow-sm ${showSignature ? 'left-[18px]' : 'left-0.5'}`}></div>
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
             
@@ -702,10 +743,7 @@ const App: React.FC = () => {
 
         <main className="flex-1 bg-white/95 backdrop-blur-xl md:rounded-3xl shadow-2xl flex relative overflow-hidden border border-white/20 min-w-0 print:hidden">
             
-            {/* TEACHER LIST:
-                - In Dashboard: It appears as a main block below stats (Full width).
-                - In Editor Views: It appears as a Sidebar (Fixed width).
-            */}
+            {/* TEACHER LIST */}
             <div className={`
                 transition-all duration-300 flex flex-col bg-white border-l border-gray-200 z-10 print:hidden
                 ${view === AppView.DASHBOARD ? 'w-full order-2 hidden' : 'w-80 h-full absolute right-0 md:static transform translate-x-full md:translate-x-0 shadow-xl md:shadow-none'}
@@ -782,6 +820,7 @@ const App: React.FC = () => {
                         availableSchools={acqAvailableSchools} 
                         onDataUpdated={() => setAcqRefreshKey(prev => prev + 1)}
                         externalFilters={acqFilters} 
+                        onUpdateFilters={(updates) => setAcqFilters(prev => ({ ...prev, ...updates }))}
                     />
                 )}
 
@@ -809,8 +848,11 @@ const App: React.FC = () => {
                         teachers={teachers} 
                         reportsMap={reportsMap} 
                         tenureReportsMap={tenureReportsMap} 
-                        signature={signature}
+                        signature={effectiveSignature}
                         onUploadSignature={handleSignatureUpload}
+                        inspectorName={inspectorName}
+                        globalWilaya={derivedGlobalData.wilaya}
+                        globalDistrict={derivedGlobalData.district}
                     />
                 )}
                 

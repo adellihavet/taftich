@@ -60,5 +60,5 @@ export const INITIAL_QUARTERLY_REPORT_STATE: QuarterlyReportData = {
     days: { sun: 0, mon: 0, tue: 0, wed: 0, thu: 0 },
     ranks: { stagiere: 0, primary: 0, class1: 0, class2: 0, distinguished: 0, contract: 0 },
     levels: { prep: 0, year1: 0, year2: 0, year3: 0, year4: 0, year5: 0 },
-    subjects: { arabic: 0, math: 0, islamic: 0, historyGeo: 0, civics: 0, science: 0, music: 0, art: 0 }
+    subjects: { arabic: 0, math: 0, islamic: 0, history: 0, geo: 0, civics: 0, science: 0, art: 0 }
 };
