@@ -9,8 +9,8 @@ import { createClient } from '@supabase/supabase-js';
 // يفضل وضع هذه القيم في ملف .env باسم VITE_SUPABASE_URL و VITE_SUPABASE_ANON_KEY
 // أو يمكنك وضعها مباشرة هنا كحل مؤقت.
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || "https://voqxebgaebmmijvzcaun.supabase.co"; 
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZvcXhlYmdhZWJtbWlqdnpjYXVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5OTQ3MzUsImV4cCI6MjA3OTU3MDczNX0.NPN6zGNVSJYmZloosWL_s-dTogxpLjpgKH8w1e6E3Os";
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || "https://nmqafqfpwalzvfzjhtkb.supabase.co"; 
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tcWFmcWZwd2FsenZmempodGtiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5NDUyMzAsImV4cCI6MjA4MDUyMTIzMH0.g7h1O-a3NP3sgvwcOYXzlEzbqSrrsvCPe6QgE6cMWSo";
 
 let supabaseClient: any = null;
 
