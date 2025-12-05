@@ -12,6 +12,7 @@ interface SendingScheduleProps {
     wilaya: string;
     district: string;
     onBack: () => void;
+    signature?: string; // Added prop
 }
 
 type RecipientType = 'school_director' | 'education_director';
@@ -27,7 +28,7 @@ const DEPARTMENTS = [
 ];
 
 const SendingSchedule: React.FC<SendingScheduleProps> = ({ 
-    teachers, reportsMap, tenureReportsMap, inspectorName, wilaya, district, onBack
+    teachers, reportsMap, tenureReportsMap, inspectorName, wilaya, district, onBack, signature
 }) => {
     // --- STATE ---
     const [recipientType, setRecipientType] = useState<RecipientType>('education_director');
@@ -195,10 +196,17 @@ const SendingSchedule: React.FC<SendingScheduleProps> = ({
                 <div className="text-center font-bold text-sm">
                     <p>المستلم</p>
                 </div>
-                <div className="text-center font-bold text-sm w-1/3">
+                <div className="text-center font-bold text-sm w-1/3 relative">
                     <p className="mb-8">{wilaya} في: {new Date().toLocaleDateString('ar-DZ')}</p>
                     <p className="mb-2">مفتش المقاطعة</p>
                     <p className="text-xs text-gray-400 mt-8"></p>
+                    
+                    {/* SIGNATURE OVERLAY */}
+                    {signature && (
+                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-40 h-28 pointer-events-none mix-blend-multiply mt-4">
+                            <img src={signature} className="w-full h-full object-contain opacity-90 -rotate-6" alt="Signature" />
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

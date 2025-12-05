@@ -2,6 +2,7 @@
 import React from 'react';
 import { ReportData, Teacher } from '../types';
 import { FileDown } from 'lucide-react';
+import { formatDateForDisplay } from '../utils/sheetHelper';
 
 interface PrintableReportProps {
   report: ReportData;
@@ -81,9 +82,9 @@ const PrintableReport: React.FC<PrintableReportProps> = ({ report, teacher, sign
                                 <table className="w-full">
                                     <tbody>
                                         <tr className="h-5"><td className="font-bold w-20">الاسم واللقب:</td><td>{teacher.fullName}</td></tr>
-                                        <tr className="h-5"><td className="font-bold">تاريخ الميلاد:</td><td dir="ltr" className="text-right">{teacher.birthDate}</td></tr>
+                                        <tr className="h-5"><td className="font-bold">تاريخ الميلاد:</td><td dir="ltr" className="text-right">{formatDateForDisplay(teacher.birthDate)}</td></tr>
                                         <tr className="h-5"><td className="font-bold">الشهادة:</td><td>{teacher.degree}</td></tr>
-                                        <tr className="h-5"><td className="font-bold">تاريخ التعيين:</td><td dir="ltr" className="text-right">{teacher.recruitmentDate}</td></tr>
+                                        <tr className="h-5"><td className="font-bold">تاريخ التعيين:</td><td dir="ltr" className="text-right">{formatDateForDisplay(teacher.recruitmentDate)}</td></tr>
                                         <tr className="h-5"><td className="font-bold">الرتبة:</td><td>{teacher.rank}</td></tr>
                                     </tbody>
                                 </table>
@@ -92,9 +93,9 @@ const PrintableReport: React.FC<PrintableReportProps> = ({ report, teacher, sign
                                 <table className="w-full">
                                     <tbody>
                                         <tr className="h-5"><td className="font-bold w-24">الصفة:</td><td>{teacher.status === 'titulaire' ? 'مرسم' : 'متعاقد'}</td></tr>
-                                        <tr className="h-5"><td className="font-bold">الدرجة:</td><td>{teacher.echelon || '-'} (تاريخها: {teacher.echelonDate})</td></tr>
-                                        <tr className="h-5"><td className="font-bold">تاريخ الرتبة:</td><td dir="ltr" className="text-right">{teacher.currentRankDate}</td></tr>
-                                        <tr className="h-5"><td className="font-bold">آخر تفتيش:</td><td>{teacher.lastInspectionDate} ({teacher.lastMark})</td></tr>
+                                        <tr className="h-5"><td className="font-bold">الدرجة:</td><td>{teacher.echelon || '-'} (تاريخها: <span dir="ltr">{formatDateForDisplay(teacher.echelonDate)}</span>)</td></tr>
+                                        <tr className="h-5"><td className="font-bold">تاريخ الرتبة:</td><td dir="ltr" className="text-right">{formatDateForDisplay(teacher.currentRankDate)}</td></tr>
+                                        <tr className="h-5"><td className="font-bold">آخر تفتيش:</td><td><span dir="ltr">{formatDateForDisplay(teacher.lastInspectionDate)}</span> ({teacher.lastMark})</td></tr>
                                     </tbody>
                                 </table>
                              </td>
@@ -266,7 +267,7 @@ const PrintableReport: React.FC<PrintableReportProps> = ({ report, teacher, sign
                      </div>
                  </div>
                  <div className="w-1/3 p-2 text-center relative flex flex-col items-center justify-start pt-2">
-                     <p className="text-[10px] font-bold mb-1">حرر بـ: {report.wilaya} في: {report.inspectionDate}</p>
+                     <p className="text-[10px] font-bold mb-1">حرر بـ: {report.wilaya} في: <span dir="ltr">{formatDateForDisplay(report.inspectionDate)}</span></p>
                      <p className="font-bold underline text-[12px] mb-1">المفتش التربوي</p>
                      <p className="text-[12px] font-bold mb-2">{report.inspectorName}</p>
                      

@@ -22,9 +22,10 @@ import { supabase, isSupabaseConfigured, fetchScriptUrlFromCloud } from './servi
 import { Teacher, ReportData, TenureReportData, QuarterlyReportData, AppView, LibraryLink } from './types';
 import { AcqFilterState } from './types/acquisitions';
 import { MOCK_TEACHERS, INITIAL_REPORT_STATE, INITIAL_TENURE_REPORT_STATE, INITIAL_QUARTERLY_REPORT_STATE } from './constants';
-import { Database, LayoutDashboard, ArrowUpCircle, PenLine, LogOut, UserCircle2, Hexagon, PieChart, Cloud, RefreshCcw, AlertCircle, BarChart2, Presentation, Briefcase, Menu, X, Stamp } from 'lucide-react';
-import { syncWithScript } from './services/sheetsService';
-import { generateDatabaseRows } from './utils/sheetHelper';
+import { Database, LayoutDashboard, ArrowUpCircle, PenLine, LogOut, UserCircle2, Hexagon, PieChart, Cloud, RefreshCcw, AlertCircle, BarChart2, Presentation, Briefcase, Menu, X, Stamp, Users, List, BarChart3 } from 'lucide-react';
+import { syncWithScript, readFromScript } from './services/sheetsService';
+import { generateDatabaseRows, parseDatabaseRows } from './utils/sheetHelper';
+import { generateDatabaseRows as generateRows } from './utils/sheetHelper'; // Fallback import fix
 import { getAcqDB } from './services/acqStorage';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -36,9 +37,22 @@ const App: React.FC = () => {
   // Mobile Menu State
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  const [view, setView] = useState<AppView>(AppView.DASHBOARD);
+  // --- PERSISTENCE: View & Selection ---
+  const [view, setView] = useState<AppView>(() => {
+      // Restore last view from local storage or default to DASHBOARD
+      return (localStorage.getItem('mufattish_last_view') as AppView) || AppView.DASHBOARD;
+  });
+  
+  // Dashboard Tab State (Stats vs List)
+  const [dashboardTab, setDashboardTab] = useState<'stats' | 'list'>('stats');
+
   const [teachers, setTeachers] = useState<Teacher[]>(MOCK_TEACHERS);
-  const [selectedTeacherId, setSelectedTeacherId] = useState<string>('');
+  
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string>(() => {
+      // Restore selected teacher ID
+      return localStorage.getItem('mufattish_last_teacher_id') || '';
+  });
+  
   const [previewTeacher, setPreviewTeacher] = useState<Teacher | null>(null);
 
   const [inspectorName, setInspectorName] = useState('');
@@ -178,8 +192,9 @@ const App: React.FC = () => {
       }
   }, [reportsMap]); 
 
-  // --- INITIALIZATION ---
+  // --- INITIALIZATION & PERSISTENCE ---
   useEffect(() => {
+    // 1. Supabase / Auth Init
     if (isSupabaseConfigured() && supabase) {
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session);
@@ -245,10 +260,38 @@ const App: React.FC = () => {
     const scriptUrl = localStorage.getItem('mufattish_script_url');
     if (scriptUrl) {
         setIsGoogleConnected(true);
+        
+        // --- AUTO-RESTORE LOGIC ---
+        // If local data is empty but we have a script URL, try to fetch silently
+        // We check 'savedTeachers' string directly to avoid race conditions with state update
+        if (!savedTeachers || savedTeachers === '[]') {
+            console.log("Local data empty, attempting auto-restore from cloud...");
+            setSyncStatus('syncing');
+            setSyncMessage('جاري استرجاع البيانات تلقائياً...');
+            
+            readFromScript(scriptUrl).then(data => {
+                if (Array.isArray(data)) {
+                    const { teachers: newTeachers, reportsMap: parsedReports } = parseDatabaseRows(data);
+                    if (newTeachers.length > 0) {
+                        setTeachers(newTeachers);
+                        setReportsMap(parsedReports);
+                        setSyncStatus('success');
+                        setSyncMessage('تم استرجاع البيانات');
+                        setTimeout(() => setSyncStatus('idle'), 3000);
+                    } else {
+                        setSyncStatus('idle'); // Just idle if remote is also empty
+                    }
+                }
+            }).catch(err => {
+                console.error("Auto restore failed:", err);
+                setSyncStatus('error');
+                setSyncMessage('فشل الاسترجاع التلقائي');
+            });
+        }
     }
   }, []);
 
-  // --- LOCAL STORAGE SAVE ---
+  // --- LOCAL STORAGE SAVE & VIEW PERSISTENCE ---
   useEffect(() => { localStorage.setItem('mufattish_teachers', JSON.stringify(teachers)); }, [teachers]);
   useEffect(() => { localStorage.setItem('mufattish_reports_map', JSON.stringify(reportsMap)); }, [reportsMap]);
   useEffect(() => { localStorage.setItem('mufattish_tenure_reports_map', JSON.stringify(tenureReportsMap)); }, [tenureReportsMap]);
@@ -256,8 +299,12 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('mufattish_is_gold', isGoldMember.toString()); }, [isGoldMember]);
   useEffect(() => { localStorage.setItem('mufattish_inspector_name', inspectorName); }, [inspectorName]);
   useEffect(() => { localStorage.setItem('mufattish_show_signature', String(showSignature)); }, [showSignature]);
+  
+  // Save View & Selected Teacher
+  useEffect(() => { if (view) localStorage.setItem('mufattish_last_view', view); }, [view]);
+  useEffect(() => { localStorage.setItem('mufattish_last_teacher_id', selectedTeacherId); }, [selectedTeacherId]);
 
-  // --- GOOGLE SYNC LOGIC ---
+  // --- GOOGLE SYNC LOGIC (Push) ---
   useEffect(() => {
       if (isFirstMount.current) {
           isFirstMount.current = false;
@@ -743,11 +790,10 @@ const App: React.FC = () => {
 
         <main className="flex-1 bg-white/95 backdrop-blur-xl md:rounded-3xl shadow-2xl flex relative overflow-hidden border border-white/20 min-w-0 print:hidden">
             
-            {/* TEACHER LIST */}
+            {/* TEACHER LIST SIDEBAR (Only visible in EDITOR Views) */}
             <div className={`
                 transition-all duration-300 flex flex-col bg-white border-l border-gray-200 z-10 print:hidden
-                ${view === AppView.DASHBOARD ? 'w-full order-2 hidden' : 'w-80 h-full absolute right-0 md:static transform translate-x-full md:translate-x-0 shadow-xl md:shadow-none'}
-                ${isEditorView ? 'block' : 'hidden'} 
+                ${isEditorView ? 'w-80 h-full absolute right-0 md:static transform translate-x-full md:translate-x-0 shadow-xl md:shadow-none block' : 'hidden'} 
             `}>
                  <TeacherList 
                     teachers={filteredTeachers} 
@@ -767,35 +813,67 @@ const App: React.FC = () => {
             {/* MAIN CONTENT AREA */}
             <div className="flex-1 flex flex-col overflow-hidden relative w-full print:hidden">
                 
-                {/* DASHBOARD SPECIFIC LAYOUT */}
+                {/* DASHBOARD SPLIT VIEW (NEW) */}
                 {view === AppView.DASHBOARD && (
-                    <div className="flex flex-col h-full overflow-y-auto">
-                        {/* 1. Stats Panel */}
-                        <div className="shrink-0">
-                            <DashboardStats teachers={filteredTeachers} reportsMap={reportsMap} onNavigateToPromotions={() => setView(AppView.PROMOTIONS)} fullTeacherCount={teachers.length} selectedSchool={filterSchool} />
-                        </div>
-                        
-                        {/* 2. Teacher List (Embedded in Dashboard) */}
-                        <div className="flex-1 p-6 bg-white border-t border-gray-100 min-h-[500px]">
-                            <h2 className="text-xl font-bold text-gray-800 mb-4 px-2 flex items-center gap-2">
-                                <UserCircle2 className="text-blue-600"/>
-                                قائمة الأساتذة والعمليات
-                            </h2>
-                            <div className="h-full border rounded-xl overflow-hidden shadow-sm">
-                                <TeacherList 
-                                    teachers={filteredTeachers} 
-                                    reportsMap={reportsMap}
-                                    currentReport={currentReport}
-                                    onSelect={handleSelectTeacher} 
-                                    selectedId={selectedTeacherId}
-                                    onAddNew={handleAddNewTeacher}
-                                    onImport={handleFullImport}
-                                    onDelete={handleDeleteTeacher}
-                                    availableSchools={availableSchools} availableLevels={availableLevels}
-                                    filterSchool={filterSchool} filterLevel={filterLevel}
-                                    onSetFilterSchool={setFilterSchool} onSetFilterLevel={setFilterLevel}
-                                />
+                    <div className="flex flex-col h-full bg-slate-50/50">
+                        {/* Dashboard Tabs Header */}
+                        <div className="bg-white border-b px-6 py-3 flex justify-between items-center shadow-sm shrink-0 z-20">
+                            <h1 className="text-xl font-bold text-slate-800 font-serif flex items-center gap-2">
+                                <LayoutDashboard className="text-blue-600" />
+                                لوحة القيادة
+                            </h1>
+                            
+                            <div className="flex bg-slate-100 p-1 rounded-xl">
+                                <button 
+                                    onClick={() => setDashboardTab('stats')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${dashboardTab === 'stats' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    <BarChart3 size={18} />
+                                    الإحصائيات
+                                </button>
+                                <button 
+                                    onClick={() => setDashboardTab('list')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${dashboardTab === 'list' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    <Users size={18} />
+                                    قائمة الأساتذة
+                                </button>
                             </div>
+                        </div>
+
+                        {/* Dashboard Content Area */}
+                        <div className="flex-1 overflow-hidden relative">
+                            {dashboardTab === 'stats' ? (
+                                <div className="h-full overflow-y-auto animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                    <DashboardStats 
+                                        teachers={filteredTeachers} 
+                                        reportsMap={reportsMap} 
+                                        onNavigateToPromotions={() => setView(AppView.PROMOTIONS)} 
+                                        fullTeacherCount={teachers.length} 
+                                        selectedSchool={filterSchool} 
+                                    />
+                                </div>
+                            ) : (
+                                <div className="h-full p-6 animate-in fade-in slide-in-from-right-2 duration-300">
+                                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 h-full overflow-hidden flex flex-col">
+                                        <div className="flex-1 overflow-hidden">
+                                            <TeacherList 
+                                                teachers={filteredTeachers} 
+                                                reportsMap={reportsMap}
+                                                currentReport={currentReport}
+                                                onSelect={handleSelectTeacher} 
+                                                selectedId={selectedTeacherId}
+                                                onAddNew={handleAddNewTeacher}
+                                                onImport={handleFullImport}
+                                                onDelete={handleDeleteTeacher}
+                                                availableSchools={availableSchools} availableLevels={availableLevels}
+                                                filterSchool={filterSchool} filterLevel={filterLevel}
+                                                onSetFilterSchool={setFilterSchool} onSetFilterLevel={setFilterLevel}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
@@ -861,6 +939,7 @@ const App: React.FC = () => {
                         teachers={teachers} 
                         reportsMap={reportsMap} 
                         inspectorInfo={{ name: currentReport.inspectorName || inspectorName, district: derivedGlobalData.district, wilaya: derivedGlobalData.wilaya }}
+                        signature={effectiveSignature} // Pass Signature
                     />
                 )}
                 
@@ -872,6 +951,7 @@ const App: React.FC = () => {
                         inspectorName={currentReport.inspectorName || inspectorName}
                         wilaya={derivedGlobalData.wilaya}
                         district={derivedGlobalData.district}
+                        signature={effectiveSignature} // Pass Signature
                     />
                 )}
             </div>

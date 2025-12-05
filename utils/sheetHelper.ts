@@ -41,6 +41,24 @@ export const normalizeDate = (val: any): string => {
     return str; 
 };
 
+/**
+ * دالة مساعدة لتحويل التاريخ من صيغة النظام (YYYY-MM-DD)
+ * إلى صيغة العرض العربية (DD/MM/YYYY)
+ */
+export const formatDateForDisplay = (dateStr: string | undefined | null): string => {
+    if (!dateStr) return '';
+    const str = String(dateStr).trim();
+    
+    // Check if it matches YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+        const [year, month, day] = str.split('-');
+        return `${year}/${month}/${day}`;
+    }
+    
+    // If it's already DD-MM-YYYY or DD/MM/YYYY, ensure slashes
+    return str.replace(/-/g, '/');
+};
+
 // --- SMART NORMALIZATION FUNCTIONS ---
 
 const normalizeRank = (input: string): string => {

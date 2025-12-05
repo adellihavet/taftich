@@ -13,10 +13,11 @@ interface TenureExamNotificationProps {
     wilaya: string;
     district: string;
     onBack: () => void;
+    signature?: string; // Added prop
 }
 
 const TenureExamNotification: React.FC<TenureExamNotificationProps> = ({ 
-    teachers, reportsMap, inspectorName, wilaya, district, onBack
+    teachers, reportsMap, inspectorName, wilaya, district, onBack, signature
 }) => {
     // --- STATE ---
     const [selectedTeacherId, setSelectedTeacherId] = useState<string>('');
@@ -120,9 +121,16 @@ const TenureExamNotification: React.FC<TenureExamNotificationProps> = ({
                         <p className="font-bold underline mb-2">إمضاء مدير(ة) المدرسة</p>
                     </div>
 
-                    <div className="text-center w-1/3">
+                    <div className="text-center w-1/3 relative">
                         <p className="font-bold underline mb-8">مفتش المقاطعة</p>
                         <div className="h-24 w-full"></div>
+                        
+                        {/* SIGNATURE OVERLAY */}
+                        {signature && (
+                            <div className="absolute top-10 left-1/2 transform -translate-x-1/2 w-40 h-28 pointer-events-none mix-blend-multiply">
+                                <img src={signature} className="w-full h-full object-contain opacity-90 -rotate-6" alt="Signature" />
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

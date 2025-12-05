@@ -13,12 +13,13 @@ interface AdministrativeAssistantProps {
     inspectorName: string;
     wilaya: string;
     district: string;
+    signature?: string; // Added prop
 }
 
 type ViewMode = 'menu' | 'schedule' | 'tenure_notice' | 'correspondence';
 
 const AdministrativeAssistant: React.FC<AdministrativeAssistantProps> = ({ 
-    teachers, reportsMap, tenureReportsMap, inspectorName, wilaya, district 
+    teachers, reportsMap, tenureReportsMap, inspectorName, wilaya, district, signature 
 }) => {
     const [mode, setMode] = useState<ViewMode>('menu');
 
@@ -33,6 +34,7 @@ const AdministrativeAssistant: React.FC<AdministrativeAssistantProps> = ({
                 wilaya={wilaya}
                 district={district}
                 onBack={() => setMode('menu')}
+                signature={signature} // Pass signature
             />
         );
     }
@@ -46,6 +48,7 @@ const AdministrativeAssistant: React.FC<AdministrativeAssistantProps> = ({
                 wilaya={wilaya}
                 district={district}
                 onBack={() => setMode('menu')}
+                signature={signature} // Pass signature
             />
         );
     }
@@ -58,6 +61,7 @@ const AdministrativeAssistant: React.FC<AdministrativeAssistantProps> = ({
                 wilaya={wilaya}
                 district={district}
                 onBack={() => setMode('menu')}
+                signature={signature} // Pass signature
             />
         );
     }

@@ -15,7 +15,7 @@ export interface Teacher {
   lastMark: number;
   status: 'stagiere' | 'contractuel' | 'titulaire';
   tenureDate?: string; 
-  privateNotes?: string; // الملاحظات السرية
+  privateNotes?: string;
 }
 
 export interface ObservationItem {
@@ -217,6 +217,18 @@ export interface QuarterlyReportData {
         science: number;
         art: number;
     };
+}
+
+export interface SeminarEvent {
+    id: string;
+    topic: string;
+    date: string;
+    location: string;
+    isExternalLocation: boolean; // true if manual input
+    duration: string;
+    targetLevels: string[];
+    supervisor: string;
+    notes: string;
 }
 
 export interface LibraryLink {

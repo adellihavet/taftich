@@ -12,10 +12,11 @@ interface AdminCorrespondenceProps {
     wilaya: string;
     district: string;
     onBack: () => void;
+    signature?: string; // Added prop
 }
 
 const AdminCorrespondence: React.FC<AdminCorrespondenceProps> = ({ 
-    reportsMap, inspectorName, wilaya, district, onBack
+    reportsMap, inspectorName, wilaya, district, onBack, signature
 }) => {
     // --- STATE ---
     const [recipientMode, setRecipientMode] = useState<'school' | 'other'>('school');
@@ -125,9 +126,16 @@ const AdminCorrespondence: React.FC<AdminCorrespondenceProps> = ({
 
             {/* Signature (Fixed Bottom) */}
             <div className="flex justify-end pt-4 px-8 mt-auto shrink-0">
-                <div className="text-center w-64">
+                <div className="text-center w-64 relative">
                     <p className="font-bold underline mb-8">مفتش المقاطعة</p>
                     <div className="h-16 w-full"></div>
+                    
+                    {/* SIGNATURE OVERLAY */}
+                    {signature && (
+                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-40 h-28 pointer-events-none mix-blend-multiply mt-4">
+                            <img src={signature} className="w-full h-full object-contain opacity-90 -rotate-6" alt="Signature" />
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

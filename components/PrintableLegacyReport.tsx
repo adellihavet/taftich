@@ -2,6 +2,7 @@
 import React from 'react';
 import { ReportData, Teacher } from '../types';
 import { FileDown } from 'lucide-react';
+import { formatDateForDisplay } from '../utils/sheetHelper';
 
 interface PrintableLegacyReportProps {
   report: ReportData;
@@ -73,14 +74,14 @@ const PrintableLegacyReport: React.FC<PrintableLegacyReportProps> = ({ report, t
 
                 <div className="flex items-center mb-0.5">
                     <span className="font-bold ml-2 w-24">تاريخ ومكان الميلاد:</span>
-                    <span className="font-normal flex-1 text-right" dir="ltr">{teacher.birthDate}</span>
+                    <span className="font-normal flex-1 text-right" dir="ltr">{formatDateForDisplay(teacher.birthDate)}</span>
                     <span className="font-bold px-2">بـ:</span>
                     <span className="font-normal flex-[2]">{teacher.birthPlace}</span>
                 </div>
 
                 <div className="flex items-center mb-0.5">
                     <span className="font-bold ml-2 w-20">تاريخ أول تعيين:</span>
-                    <span className="font-normal w-24 text-right" dir="ltr">{teacher.recruitmentDate}</span>
+                    <span className="font-normal w-24 text-right" dir="ltr">{formatDateForDisplay(teacher.recruitmentDate)}</span>
                     <span className="font-bold ml-2 w-10 text-center">الإطار:</span>
                     <span className="font-normal flex-1">{teacher.rank}</span>
                 </div>
@@ -89,26 +90,26 @@ const PrintableLegacyReport: React.FC<PrintableLegacyReportProps> = ({ report, t
                     <span className="font-bold ml-2 w-20">الدرجة:</span>
                     <span className="font-normal w-24">{teacher.echelon}</span>
                     <span className="font-bold ml-2 w-10 text-center">تاريخها:</span>
-                    <span className="font-normal flex-1 text-right pr-2" dir="ltr">{teacher.echelonDate}</span>
+                    <span className="font-normal flex-1 text-right pr-2" dir="ltr">{formatDateForDisplay(teacher.echelonDate)}</span>
                 </div>
 
                 <div className="flex items-center mb-0.5">
                     <span className="font-bold ml-2 w-20">المؤهل العلمي:</span>
                     <span className="font-normal w-24">{teacher.degree}</span>
                     <span className="font-bold ml-2 w-10 text-center">تاريخه:</span>
-                    <span className="font-normal flex-1 text-right pr-2" dir="ltr">{teacher.degreeDate || report.legacyData?.graduationDate}</span> 
+                    <span className="font-normal flex-1 text-right pr-2" dir="ltr">{formatDateForDisplay(teacher.degreeDate || report.legacyData?.graduationDate)}</span> 
                 </div>
 
                 <div className="flex items-center mb-0.5">
                     <span className="font-bold ml-2 w-20">المعهد:</span>
                     <span className="font-normal w-24">{report.legacyData?.trainingInstitute}</span>
                     <span className="font-bold ml-2 w-10 text-center">التخرج:</span>
-                    <span className="font-normal flex-1 text-right pr-2" dir="ltr">{report.legacyData?.trainingDate}</span>
+                    <span className="font-normal flex-1 text-right pr-2" dir="ltr">{formatDateForDisplay(report.legacyData?.trainingDate)}</span>
                 </div>
 
                 <div className="flex items-center">
                     <span className="font-bold ml-2 w-20">آخر تفتيش:</span>
-                    <span className="font-normal w-24 text-right" dir="ltr">{teacher.lastInspectionDate}</span>
+                    <span className="font-normal w-24 text-right" dir="ltr">{formatDateForDisplay(teacher.lastInspectionDate)}</span>
                     <span className="font-bold ml-2 w-10 text-center">العلامة:</span>
                     <span className="font-normal flex-1">{teacher.lastMark}</span>
                 </div>
@@ -122,7 +123,7 @@ const PrintableLegacyReport: React.FC<PrintableLegacyReportProps> = ({ report, t
                     <div>
                         <h3 className="font-bold underline text-[11px] mb-1">ظروف التفتيش</h3>
                         <div className="flex justify-between font-bold mb-1">
-                            <span>تاريخ التفتيش : <span className="font-normal">{report.inspectionDate}</span></span>
+                            <span>تاريخ التفتيش : <span className="font-normal" dir="ltr">{formatDateForDisplay(report.inspectionDate)}</span></span>
                             <span>مدته: <span className="font-normal">{report.duration}</span></span>
                         </div>
                         <div className="flex justify-between font-bold mb-1">
@@ -304,7 +305,7 @@ const PrintableLegacyReport: React.FC<PrintableLegacyReportProps> = ({ report, t
                      <p className="text-[11px] w-full text-right">تقرير حرره مفتش التعليم الابتدائي للمواد</p>
                      <div className="flex justify-between mt-1 px-1 w-full text-[10px]">
                          <p>السيد: {report.inspectorName}</p>
-                         <p>التاريخ: {report.inspectionDate}</p>
+                         <p>التاريخ: <span dir="ltr">{formatDateForDisplay(report.inspectionDate)}</span></p>
                      </div>
                      
                      {signature ? (

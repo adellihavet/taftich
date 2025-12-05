@@ -2,6 +2,7 @@
 import React from 'react';
 import { TenureReportData, Teacher } from '../types';
 import { FileDown } from 'lucide-react';
+import { formatDateForDisplay } from '../utils/sheetHelper';
 
 interface PrintableTenureReportProps {
   report: TenureReportData;
@@ -82,7 +83,7 @@ const PrintableTenureReport: React.FC<PrintableTenureReportProps> = ({ report, t
                     <div className="border-b-2 border-black border-dotted pb-3 space-y-1.5">
                         <p className="mb-1">اجتمعت لجنة التفتيش في سلك : أستاذ مدرسة ابتدائية</p>
                         <div className="flex flex-wrap gap-x-12 gap-y-1">
-                            <span>بتاريخ : {report.examDate}</span>
+                            <span>بتاريخ : <span dir="ltr">{formatDateForDisplay(report.examDate)}</span></span>
                             <span>في مدرسة: {report.school}</span>
                             <span>بمدينة : {report.city}</span>
                         </div>
@@ -113,28 +114,28 @@ const PrintableTenureReport: React.FC<PrintableTenureReportProps> = ({ report, t
                         
                         <div className="flex flex-wrap gap-x-16 gap-y-1 items-center">
                             <span className="min-w-[250px]">المولود(ة) في : {teacher.birthPlace}</span>
-                            <span>بتاريخ : {teacher.birthDate}</span>
+                            <span>بتاريخ : <span dir="ltr">{formatDateForDisplay(teacher.birthDate)}</span></span>
                         </div>
 
                         <div className="flex gap-4">
-                            <span className="flex-1">المتدرب(ة) منذ : {teacher.recruitmentDate}</span>
+                            <span className="flex-1">المتدرب(ة) منذ : <span dir="ltr">{formatDateForDisplay(teacher.recruitmentDate)}</span></span>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
                             <span>بمقتضى قرار التسمية رقم : {report.appointmentDecisionNumber}</span>
-                            <span>بتاريخ : {report.appointmentDecisionDate}</span>
+                            <span>بتاريخ : <span dir="ltr">{formatDateForDisplay(report.appointmentDecisionDate)}</span></span>
                             <span>تأشيرة المراقب المالي رقم : {report.financialVisaNumber}</span>
-                            <span>بتاريخ : {report.financialVisaDate}</span>
+                            <span>بتاريخ : <span dir="ltr">{formatDateForDisplay(report.financialVisaDate)}</span></span>
                         </div>
 
                         <div className="flex flex-wrap gap-x-8 gap-y-1 items-center">
                             <span>المحرز(ة) على شهادة : {teacher.degree}</span>
                             <span>من : {report.university}</span>
-                            <span>بتاريخ : {teacher.degreeDate}</span>
+                            <span>بتاريخ : <span dir="ltr">{formatDateForDisplay(teacher.degreeDate)}</span></span>
                         </div>
                         
                         {!isHigherSchoolGraduate && (
-                            <p>و {report.recruitmentType || 'الناجح في المسابقة'} بتاريخ : {report.contestDate}</p>
+                            <p>و {report.recruitmentType || 'الناجح في المسابقة'} بتاريخ : <span dir="ltr">{formatDateForDisplay(report.contestDate)}</span></p>
                         )}
                     </div>
 
@@ -280,7 +281,7 @@ const PrintableTenureReport: React.FC<PrintableTenureReportProps> = ({ report, t
                 <div className="flex justify-between items-start px-8 pb-8">
                     <div className="w-1/2"></div>
                     <div className="w-1/2 text-center text-[12px] font-bold relative flex flex-col items-center">
-                        <p className="mb-4">التاريخ : {report.examDate}</p>
+                        <p className="mb-4">التاريخ : <span dir="ltr">{formatDateForDisplay(report.examDate)}</span></p>
                         <p className="mb-1">مفتش التعليم الإبتدائي :</p>
                         <p className="mb-6 text-sm">{report.inspectorName}</p>
                         
