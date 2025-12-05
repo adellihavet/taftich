@@ -14,8 +14,8 @@ const GoogleSetupGuide: React.FC<GoogleSetupGuideProps> = ({ isOpen, onClose }) 
 
   // ---------------------------------------------------------------------------
   // هام للمطور: ضع رابط فيديو الشرح الخاص بك هنا (YouTube Embed URL)
-  // مثال: https://www.youtube.com/embed/dQw4w9WgXcQ
-  const VIDEO_URL = "https://www.youtube.com/embed/placeholder"; 
+  // تم تصحيح الرابط لاستخدام صيغة /embed/ بدلاً من /watch?v=
+  const VIDEO_URL = "https://www.youtube.com/embed/kJJvZm5hKX4"; 
   // ---------------------------------------------------------------------------
 
   if (!isOpen) return null;
