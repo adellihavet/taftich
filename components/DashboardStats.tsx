@@ -1,14 +1,14 @@
 
 import React, { useMemo, useState } from 'react';
 import { Teacher, ReportData } from '../types';
-import { Users, School, GraduationCap, TrendingUp, CheckCircle2, Award, Radar, Trophy, TrendingDown, AlertTriangle, BookOpen, Briefcase, Zap, GitCompare, MonitorSmartphone, ShieldCheck, PenTool, ChevronLeft, Building2, MapPin, Target, LayoutList, LayoutGrid, FileText, PieChart, BarChart3, CheckSquare } from 'lucide-react';
+import { Users, School, GraduationCap, TrendingUp, CheckCircle2, Award, Radar, Trophy, TrendingDown, AlertTriangle, BookOpen, Briefcase, Zap, GitCompare, MonitorSmartphone, ShieldCheck, PenTool, ChevronLeft, Building2, MapPin, Target, LayoutList, LayoutGrid, FileText, PieChart, BarChart3, CheckSquare, Calendar, Lightbulb, ClipboardList } from 'lucide-react';
 
 interface DashboardStatsProps {
     teachers: Teacher[];
     reportsMap: Record<string, ReportData>;
     onNavigateToPromotions?: () => void;
-    fullTeacherCount?: number; // Total count before filtering (for context)
-    selectedSchool?: string; // Currently active filter
+    fullTeacherCount?: number; 
+    selectedSchool?: string; 
 }
 
 const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, onNavigateToPromotions, fullTeacherCount, selectedSchool }) => {
@@ -29,7 +29,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
     // Unique Schools
     const uniqueSchools = useMemo(() => {
         const schools = new Set<string>();
-        Object.values(reportsMap).forEach(r => {
+        Object.values(reportsMap).forEach((r: ReportData) => {
             if (r.school) schools.add(r.school.trim());
         });
         return schools.size;
@@ -46,71 +46,106 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
         return counts;
     }, [teachers]);
 
-    // --- LEGACY SPECIFIC STATS ---
-    const legacyStats = useMemo(() => {
+    // --- LEGACY SPECIFIC STATS & SUGGESTIONS ---
+    const legacyAnalysis = useMemo(() => {
         const stats = {
             count: 0,
-            // Preparation
             preparation: { good: 0, medium: 0, weak: 0 },
-            // Objectives
             objectives: { full: 0, partial: 0, none: 0 },
-            // Registers
             registers: { monitored: 0, notMonitored: 0 },
-            // Board
             board: { organized: 0, random: 0 },
-            // Notebooks
-            notebooks: { good: 0, medium: 0, bad: 0 }
+            notebooks: { good: 0, medium: 0, bad: 0 },
+            
+            // New Counters for Training Suggestions
+            weakPreparationCount: 0,
+            weakRegistersCount: 0,
+            weakNotebooksCount: 0,
+            weakObjectivesCount: 0,
+            badBoardWorkCount: 0,
+            weakProgressionCount: 0
         };
 
-        Object.values(reportsMap).forEach(r => {
-            if (r.reportModel === 'legacy' && r.legacyData) {
-                // Filter by current teacher list context if needed (optional optimization)
-                if (!teachers.some(t => t.id === r.teacherId)) return;
+        Object.values(reportsMap).forEach((r: ReportData) => {
+            // Apply filtering logic if needed (teacher present in current list)
+            if (!teachers.some(t => t.id === r.teacherId)) return;
 
+            if (r.reportModel === 'legacy' && r.legacyData) {
                 stats.count++;
+                const d = r.legacyData;
 
                 // Prep
-                const prep = r.legacyData.preparationValue;
-                if (prep === 'جيدة') stats.preparation.good++;
-                else if (prep === 'متوسطة' || prep === 'مقبولة') stats.preparation.medium++;
-                else stats.preparation.weak++;
+                if (d.preparationValue === 'جيدة' || d.preparationValue.includes('جيدة')) stats.preparation.good++;
+                else if (d.preparationValue === 'متوسطة' || d.preparationValue === 'مقبولة') stats.preparation.medium++;
+                else {
+                    stats.preparation.weak++;
+                    stats.weakPreparationCount++;
+                }
 
                 // Objectives
-                const obj = r.legacyData.objectivesAchieved;
-                if (obj === 'تحققت كلياً') stats.objectives.full++;
-                else if (obj === 'تحققت جزئياً' || obj === 'تحققت نسبياً') stats.objectives.partial++;
-                else stats.objectives.none++;
+                if (d.objectivesAchieved === 'تحققت كلياً') stats.objectives.full++;
+                else if (d.objectivesAchieved.includes('جزئياً') || d.objectivesAchieved.includes('نسبياً')) stats.objectives.partial++;
+                else {
+                    stats.objectives.none++;
+                    stats.weakObjectivesCount++;
+                }
 
                 // Registers
-                if (r.legacyData.registersMonitored?.includes('نعم')) stats.registers.monitored++;
-                else stats.registers.notMonitored++;
+                if (d.registersMonitored?.includes('نعم')) stats.registers.monitored++;
+                else {
+                    stats.registers.notMonitored++;
+                    stats.weakRegistersCount++;
+                }
 
                 // Board
-                if (r.legacyData.boardWork?.includes('منظمة')) stats.board.organized++;
-                else stats.board.random++;
+                if (d.boardWork?.includes('منظمة')) stats.board.organized++;
+                else {
+                    stats.board.random++;
+                    stats.badBoardWorkCount++;
+                }
 
                 // Notebooks
-                const note = r.legacyData.notebooksCare;
-                if (note === 'حسنة') stats.notebooks.good++;
-                else if (note === 'متوسطة' || note === 'مقبولة') stats.notebooks.medium++;
-                else stats.notebooks.bad++;
+                if (d.notebooksCare === 'حسنة' || d.notebooksCare.includes('حسنة')) stats.notebooks.good++;
+                else if (d.notebooksCare === 'متوسطة' || d.notebooksCare === 'مقبولة') stats.notebooks.medium++;
+                else {
+                    stats.notebooks.bad++;
+                    stats.weakNotebooksCount++;
+                }
+
+                // Progression (For suggestion)
+                if (d.progression && (d.progression.includes('غير') || d.progression.includes('متأخر'))) {
+                    stats.weakProgressionCount++;
+                }
             }
         });
 
-        return stats;
+        // Generate Suggestions based on thresholds
+        const suggestions: { title: string, priority: string, count: number }[] = [];
+        const threshold = Math.max(1, Math.round(stats.count * 0.2)); // 20% of cases trigger a suggestion
+
+        if (stats.weakPreparationCount >= threshold) suggestions.push({ title: 'فنيات إعداد المذكرة التربوية', priority: 'عالية', count: stats.weakPreparationCount });
+        if (stats.weakObjectivesCount >= threshold) suggestions.push({ title: 'صياغة الأهداف الإجرائية وقياسها', priority: 'عالية', count: stats.weakObjectivesCount });
+        if (stats.badBoardWorkCount >= threshold) suggestions.push({ title: 'تقنيات استغلال السبورة وتنظيمها', priority: 'متوسطة', count: stats.badBoardWorkCount });
+        if (stats.weakNotebooksCount >= threshold) suggestions.push({ title: 'أهمية العناية بدفاتر المتعلمين وتصحيحها', priority: 'منخفضة', count: stats.weakNotebooksCount });
+        if (stats.weakRegistersCount >= threshold) suggestions.push({ title: 'مسك السجلات والوثائق الرسمية', priority: 'متوسطة', count: stats.weakRegistersCount });
+        if (stats.weakProgressionCount >= threshold) suggestions.push({ title: 'التخطيط وبناء التدرجات السنوية', priority: 'عالية', count: stats.weakProgressionCount });
+
+        return { stats, suggestions };
     }, [reportsMap, teachers]);
 
 
     // --- MODERN SPECIFIC STATS ---
 
-    // Students by Level
+    // Students by Level (Fixed: Summing actual student counts)
     const studentsByLevel = useMemo(() => {
         const levels: Record<string, number> = {};
         teachers.forEach(t => {
             const r = reportsMap[t.id];
-            if (r && r.level && r.studentCount) {
+            // Filter by current list context
+            if (r && r.level) {
                 const lvl = r.level.trim();
-                levels[lvl] = (levels[lvl] || 0) + r.studentCount;
+                // Ensure we use the actual number from the report, default to 0 if not set
+                const count = r.studentCount || 0; 
+                levels[lvl] = (levels[lvl] || 0) + count;
             }
         });
         const sortOrder = ['التربية التحضيرية', 'السنة الأولى', 'السنة الثانية', 'السنة الثالثة', 'السنة الرابعة', 'السنة الخامسة'];
@@ -164,14 +199,16 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
         return groups;
     }, [teachers]);
 
-    // Comparative Analysis
+    // Comparative Analysis (Expanded to 5 Criteria)
     const comparativeAnalysis = useMemo(() => {
-        const juniors = { count: 0, tech: 0, control: 0, pedagogy: 0 };
-        const seniors = { count: 0, tech: 0, control: 0, pedagogy: 0 };
+        const juniors = { count: 0, tech: 0, control: 0, pedagogy: 0, planning: 0, evaluation: 0 };
+        const seniors = { count: 0, tech: 0, control: 0, pedagogy: 0, planning: 0, evaluation: 0 };
         
         const techCats = ['التكنولوجيا', 'الوسائل', 'استراتيجيات التعلم'];
         const controlCats = ['النظام', 'الحركة', 'التعليمات', 'ضبط الصف'];
-        const pedagogyCats = ['التخطيط', 'الموارد المعرفية', 'الوضعية التعلمية'];
+        const pedagogyCats = ['الموارد المعرفية', 'الوضعية التعلمية'];
+        const planningCats = ['التخطيط', 'المخطط السنوي', 'الأهداف والوتيرة'];
+        const evaluationCats = ['التقويم', 'التقويم التكويني', 'استغلال النتائج'];
 
         teachers.forEach(t => {
             const report = reportsMap[t.id];
@@ -200,6 +237,8 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
             target.tech += getDomainScore(techCats);
             target.control += getDomainScore(controlCats);
             target.pedagogy += getDomainScore(pedagogyCats);
+            target.planning += getDomainScore(planningCats);
+            target.evaluation += getDomainScore(evaluationCats);
         });
 
         const normalize = (target: typeof juniors) => {
@@ -207,6 +246,8 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
             target.tech /= target.count;
             target.control /= target.count;
             target.pedagogy /= target.count;
+            target.planning /= target.count;
+            target.evaluation /= target.count;
         };
 
         normalize(juniors);
@@ -215,14 +256,14 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
         return { juniors, seniors };
     }, [teachers, reportsMap]);
 
-    // Marks Distribution
+    // Marks Distribution (5 Ranges)
     const marksDistribution = useMemo(() => {
         const ranges = [
-            { label: 'أقل من 10', min: 0, max: 9.99, count: 0, color: 'bg-red-400' },
-            { label: '10 - 12', min: 10, max: 11.99, count: 0, color: 'bg-orange-400' },
-            { label: '12 - 14', min: 12, max: 13.99, count: 0, color: 'bg-yellow-400' },
-            { label: '14 - 16', min: 14, max: 15.99, count: 0, color: 'bg-blue-400' },
-            { label: 'أكثر من 16', min: 16, max: 20, count: 0, color: 'bg-green-400' },
+            { label: 'دون المتوسط', min: 0, max: 9.99, count: 0, color: 'bg-red-400' },
+            { label: 'متوسط', min: 10, max: 11.99, count: 0, color: 'bg-orange-400' },
+            { label: 'جيد', min: 12, max: 13.99, count: 0, color: 'bg-yellow-400' },
+            { label: 'جيد جداً', min: 14, max: 15.99, count: 0, color: 'bg-blue-400' },
+            { label: 'ممتاز', min: 16, max: 20, count: 0, color: 'bg-emerald-500' },
         ];
 
         teachers.forEach(t => {
@@ -308,7 +349,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
     // School Ranking
     const schoolContextData = useMemo(() => {
         const schoolStats: Record<string, { totalMark: number, count: number }> = {};
-        Object.values(reportsMap).forEach(r => {
+        Object.values(reportsMap).forEach((r: ReportData) => {
             if (r.school && r.finalMark) {
                 const name = r.school.trim();
                 if (!schoolStats[name]) schoolStats[name] = { totalMark: 0, count: 0 };
@@ -348,7 +389,6 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
             const maxAllowedMark = 13 + (currentEchelon * 0.5);
             if (t.lastMark >= maxAllowedMark) return false;
 
-            // Update: Exclude those with completed reports (date and mark filled)
             const activeReport = reportsMap[t.id];
             if (activeReport) {
                 const isDateFilled = activeReport.inspectionDate && activeReport.inspectionDate.trim() !== '';
@@ -383,38 +423,38 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
     };
 
     return (
-        <div className="p-8 h-full overflow-y-auto bg-gray-50/50">
-            <div className="flex flex-col md:flex-row justify-between items-center mb-6 border-b pb-4 gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold text-gray-800 font-serif">لوحة القيادة والتحليل البيداغوجي</h1>
-                    {selectedSchool && (
-                        <p className="text-indigo-600 font-bold mt-1 flex items-center gap-2 animate-in slide-in-from-right-4">
-                            <School size={16} />
-                            تقرير خاص بمدرسة: {selectedSchool}
-                        </p>
-                    )}
+        <div className="p-4 md:p-8 h-full overflow-y-auto bg-gray-50/50">
+            {/* Header / Filter Bar - Compact */}
+            <div className="flex flex-col md:flex-row justify-between items-center mb-6 pb-2 border-b border-gray-200 gap-4">
+                <div className="flex items-center gap-4 w-full md:w-auto">
+                    {/* View Switcher */}
+                    <div className="bg-white p-1 rounded-xl border border-gray-200 shadow-sm flex w-full md:w-auto">
+                        <button 
+                            onClick={() => setStatsView('modern')}
+                            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${statsView === 'modern' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+                        >
+                            <LayoutGrid size={16} />
+                            تحليل المعايير (حديث)
+                        </button>
+                        <button 
+                            onClick={() => setStatsView('legacy')}
+                            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${statsView === 'legacy' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+                        >
+                            <LayoutList size={16} />
+                            تحليل الكلاسيكي (قديم)
+                        </button>
+                    </div>
                 </div>
-                
-                {/* View Switcher */}
-                <div className="bg-white p-1 rounded-xl border border-gray-200 shadow-sm flex">
-                    <button 
-                        onClick={() => setStatsView('modern')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${statsView === 'modern' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        <LayoutGrid size={16} />
-                        تحليل المعايير (حديث)
-                    </button>
-                    <button 
-                        onClick={() => setStatsView('legacy')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${statsView === 'legacy' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        <LayoutList size={16} />
-                        تحليل الكلاسيكي (قديم)
-                    </button>
-                </div>
+
+                {selectedSchool && (
+                    <div className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-sm animate-in fade-in">
+                        <School size={16} />
+                        تقرير خاص بمدرسة: {selectedSchool}
+                    </div>
+                )}
             </div>
             
-            {/* School Scorecard (Visible regardless of view mode if school selected) */}
+            {/* School Scorecard */}
             {selectedSchool && selectedSchoolRank && (
                 <div className="bg-gradient-to-r from-blue-900 to-indigo-800 rounded-2xl shadow-xl p-6 text-white mb-8 animate-in zoom-in-95 duration-500 relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-4 opacity-10">
@@ -505,109 +545,136 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
             {/* VIEW 1: LEGACY ANALYTICS */}
             {statsView === 'legacy' && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    {legacyStats.count === 0 ? (
+                    {legacyAnalysis.stats.count === 0 ? (
                         <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-gray-300 text-gray-400">
                             <FileText size={48} className="mx-auto mb-3 opacity-20" />
                             <p>لا توجد تقارير كلاسيكية مسجلة لعرض إحصائياتها.</p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                            
-                            {/* 1. Preparation Analysis */}
-                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-orange-100">
-                                <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
-                                    <FileText className="text-orange-500" size={20} />
-                                    جودة إعداد الدروس
-                                </h3>
-                                <div className="space-y-4">
-                                    <div>
-                                        <div className="flex justify-between text-sm mb-1"><span className="font-bold text-gray-700">إعداد جيد</span><span className="font-bold text-green-600">{legacyStats.preparation.good}</span></div>
-                                        <div className="w-full bg-gray-100 rounded-full h-2.5"><div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${(legacyStats.preparation.good / legacyStats.count) * 100}%` }}></div></div>
-                                    </div>
-                                    <div>
-                                        <div className="flex justify-between text-sm mb-1"><span className="font-bold text-gray-700">متوسط / مقبول</span><span className="font-bold text-yellow-600">{legacyStats.preparation.medium}</span></div>
-                                        <div className="w-full bg-gray-100 rounded-full h-2.5"><div className="bg-yellow-500 h-2.5 rounded-full" style={{ width: `${(legacyStats.preparation.medium / legacyStats.count) * 100}%` }}></div></div>
-                                    </div>
-                                    <div>
-                                        <div className="flex justify-between text-sm mb-1"><span className="font-bold text-gray-700">ضعيف / ناقص</span><span className="font-bold text-red-600">{legacyStats.preparation.weak}</span></div>
-                                        <div className="w-full bg-gray-100 rounded-full h-2.5"><div className="bg-red-500 h-2.5 rounded-full" style={{ width: `${(legacyStats.preparation.weak / legacyStats.count) * 100}%` }}></div></div>
+                        <div className="space-y-8">
+                            {/* Automated Training Suggestions (New) */}
+                            {legacyAnalysis.suggestions.length > 0 && (
+                                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 shadow-sm">
+                                    <h3 className="font-bold text-lg text-amber-900 mb-4 flex items-center gap-2">
+                                        <Lightbulb size={20} className="text-amber-600"/>
+                                        مقترحات التكوين (بناءً على النقائص الكلاسيكية)
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {legacyAnalysis.suggestions.map((sugg, i) => (
+                                            <div key={i} className="bg-white p-4 rounded-xl border border-amber-100 flex items-start gap-3 shadow-sm hover:shadow-md transition-all">
+                                                <div className="bg-amber-100 p-2 rounded-lg text-amber-700 font-bold text-lg min-w-[40px] text-center">
+                                                    {sugg.count}
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-bold text-gray-800 text-sm">{sugg.title}</h4>
+                                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold mt-1 inline-block ${
+                                                        sugg.priority === 'عالية' ? 'bg-red-100 text-red-600' : 
+                                                        sugg.priority === 'متوسطة' ? 'bg-orange-100 text-orange-600' : 
+                                                        'bg-blue-100 text-blue-600'
+                                                    }`}>أولوية {sugg.priority}</span>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
-                            </div>
+                            )}
 
-                            {/* 2. Objectives Achievement */}
-                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-blue-100">
-                                <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
-                                    <Target className="text-blue-500" size={20} />
-                                    مدى تحقق الأهداف
-                                </h3>
-                                <div className="flex items-center justify-center gap-6 mt-4">
-                                    <div className="relative w-32 h-32">
-                                        <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                                            <path className="text-gray-100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3" />
-                                            <path className="text-blue-500" strokeDasharray={`${(legacyStats.objectives.full / legacyStats.count) * 100}, 100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3" />
-                                        </svg>
-                                        <div className="absolute inset-0 flex items-center justify-center flex-col">
-                                            <span className="text-2xl font-bold text-blue-900">{Math.round((legacyStats.objectives.full / legacyStats.count) * 100)}%</span>
-                                            <span className="text-[10px] text-gray-500">تحقق كلي</span>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* 1. Preparation Analysis */}
+                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-orange-100">
+                                    <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
+                                        <FileText className="text-orange-500" size={20} />
+                                        جودة إعداد الدروس
+                                    </h3>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <div className="flex justify-between text-sm mb-1"><span className="font-bold text-gray-700">إعداد جيد</span><span className="font-bold text-green-600">{legacyAnalysis.stats.preparation.good}</span></div>
+                                            <div className="w-full bg-gray-100 rounded-full h-2.5"><div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${(legacyAnalysis.stats.preparation.good / legacyAnalysis.stats.count) * 100}%` }}></div></div>
+                                        </div>
+                                        <div>
+                                            <div className="flex justify-between text-sm mb-1"><span className="font-bold text-gray-700">متوسط / مقبول</span><span className="font-bold text-yellow-600">{legacyAnalysis.stats.preparation.medium}</span></div>
+                                            <div className="w-full bg-gray-100 rounded-full h-2.5"><div className="bg-yellow-500 h-2.5 rounded-full" style={{ width: `${(legacyAnalysis.stats.preparation.medium / legacyAnalysis.stats.count) * 100}%` }}></div></div>
+                                        </div>
+                                        <div>
+                                            <div className="flex justify-between text-sm mb-1"><span className="font-bold text-gray-700">ضعيف / ناقص</span><span className="font-bold text-red-600">{legacyAnalysis.stats.preparation.weak}</span></div>
+                                            <div className="w-full bg-gray-100 rounded-full h-2.5"><div className="bg-red-500 h-2.5 rounded-full" style={{ width: `${(legacyAnalysis.stats.preparation.weak / legacyAnalysis.stats.count) * 100}%` }}></div></div>
                                         </div>
                                     </div>
-                                    <div className="space-y-2 text-sm">
-                                        <div className="flex items-center gap-2"><div className="w-3 h-3 bg-blue-500 rounded-full"></div><span>كلي ({legacyStats.objectives.full})</span></div>
-                                        <div className="flex items-center gap-2"><div className="w-3 h-3 bg-gray-300 rounded-full"></div><span>جزئي/لم يتحقق ({legacyStats.objectives.partial + legacyStats.objectives.none})</span></div>
-                                    </div>
                                 </div>
-                            </div>
 
-                             {/* 3. Admin & Board Work */}
-                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-purple-100">
-                                <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
-                                    <CheckSquare className="text-purple-500" size={20} />
-                                    الانضباط الإداري والتنظيمي
-                                </h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-purple-50 p-3 rounded-lg text-center">
-                                        <p className="text-xs text-purple-800 font-bold mb-2">مراقبة السجلات</p>
-                                        <div className="text-2xl font-bold text-purple-900">
-                                            {Math.round((legacyStats.registers.monitored / legacyStats.count) * 100)}%
+                                {/* 2. Objectives Achievement */}
+                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-blue-100">
+                                    <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
+                                        <Target className="text-blue-500" size={20} />
+                                        مدى تحقق الأهداف
+                                    </h3>
+                                    <div className="flex items-center justify-center gap-6 mt-4">
+                                        <div className="relative w-32 h-32">
+                                            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                                                <path className="text-gray-100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3" />
+                                                <path className="text-blue-500" strokeDasharray={`${(legacyAnalysis.stats.objectives.full / legacyAnalysis.stats.count) * 100}, 100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3" />
+                                            </svg>
+                                            <div className="absolute inset-0 flex items-center justify-center flex-col">
+                                                <span className="text-2xl font-bold text-blue-900">{Math.round((legacyAnalysis.stats.objectives.full / legacyAnalysis.stats.count) * 100)}%</span>
+                                                <span className="text-[10px] text-gray-500">تحقق كلي</span>
+                                            </div>
                                         </div>
-                                        <p className="text-[10px] text-gray-500">تتم بانتظام</p>
-                                    </div>
-                                    <div className="bg-indigo-50 p-3 rounded-lg text-center">
-                                        <p className="text-xs text-indigo-800 font-bold mb-2">تنظيم السبورة</p>
-                                        <div className="text-2xl font-bold text-indigo-900">
-                                            {Math.round((legacyStats.board.organized / legacyStats.count) * 100)}%
+                                        <div className="space-y-2 text-sm">
+                                            <div className="flex items-center gap-2"><div className="w-3 h-3 bg-blue-500 rounded-full"></div><span>كلي ({legacyAnalysis.stats.objectives.full})</span></div>
+                                            <div className="flex items-center gap-2"><div className="w-3 h-3 bg-gray-300 rounded-full"></div><span>جزئي/لم يتحقق ({legacyAnalysis.stats.objectives.partial + legacyAnalysis.stats.objectives.none})</span></div>
                                         </div>
-                                        <p className="text-[10px] text-gray-500">منظمة ومقروءة</p>
+                                    </div>
+                                </div>
+
+                                {/* 3. Admin & Board Work */}
+                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-purple-100">
+                                    <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
+                                        <CheckSquare className="text-purple-500" size={20} />
+                                        الانضباط الإداري والتنظيمي
+                                    </h3>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-purple-50 p-3 rounded-lg text-center">
+                                            <p className="text-xs text-purple-800 font-bold mb-2">مراقبة السجلات</p>
+                                            <div className="text-2xl font-bold text-purple-900">
+                                                {Math.round((legacyAnalysis.stats.registers.monitored / legacyAnalysis.stats.count) * 100)}%
+                                            </div>
+                                            <p className="text-[10px] text-gray-500">تتم بانتظام</p>
+                                        </div>
+                                        <div className="bg-indigo-50 p-3 rounded-lg text-center">
+                                            <p className="text-xs text-indigo-800 font-bold mb-2">تنظيم السبورة</p>
+                                            <div className="text-2xl font-bold text-indigo-900">
+                                                {Math.round((legacyAnalysis.stats.board.organized / legacyAnalysis.stats.count) * 100)}%
+                                            </div>
+                                            <p className="text-[10px] text-gray-500">منظمة ومقروءة</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 4. Notebooks Care */}
+                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-teal-100">
+                                    <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
+                                        <BookOpen className="text-teal-500" size={20} />
+                                        العناية بدفاتر التلاميذ
+                                    </h3>
+                                    <div className="flex items-end justify-between h-32 px-4 gap-4">
+                                        <div className="w-1/3 bg-teal-100 rounded-t-lg relative group h-full flex items-end justify-center">
+                                            <div className="w-full bg-teal-500 rounded-t-lg transition-all" style={{ height: `${(legacyAnalysis.stats.notebooks.good / legacyAnalysis.stats.count) * 100}%` }}></div>
+                                            <span className="absolute bottom-2 text-white font-bold text-sm drop-shadow-md">{legacyAnalysis.stats.notebooks.good}</span>
+                                            <span className="absolute -bottom-6 text-xs font-bold text-gray-600">حسنة</span>
+                                        </div>
+                                        <div className="w-1/3 bg-teal-100 rounded-t-lg relative group h-full flex items-end justify-center">
+                                            <div className="w-full bg-yellow-400 rounded-t-lg transition-all" style={{ height: `${(legacyAnalysis.stats.notebooks.medium / legacyAnalysis.stats.count) * 100}%` }}></div>
+                                            <span className="absolute bottom-2 text-white font-bold text-sm drop-shadow-md">{legacyAnalysis.stats.notebooks.medium}</span>
+                                            <span className="absolute -bottom-6 text-xs font-bold text-gray-600">متوسطة</span>
+                                        </div>
+                                        <div className="w-1/3 bg-teal-100 rounded-t-lg relative group h-full flex items-end justify-center">
+                                            <div className="w-full bg-red-400 rounded-t-lg transition-all" style={{ height: `${(legacyAnalysis.stats.notebooks.bad / legacyAnalysis.stats.count) * 100}%` }}></div>
+                                            <span className="absolute bottom-2 text-white font-bold text-sm drop-shadow-md">{legacyAnalysis.stats.notebooks.bad}</span>
+                                            <span className="absolute -bottom-6 text-xs font-bold text-gray-600">سيئة</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-
-                            {/* 4. Notebooks Care */}
-                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-teal-100">
-                                <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
-                                    <BookOpen className="text-teal-500" size={20} />
-                                    العناية بدفاتر التلاميذ
-                                </h3>
-                                <div className="flex items-end justify-between h-32 px-4 gap-4">
-                                    <div className="w-1/3 bg-teal-100 rounded-t-lg relative group h-full flex items-end justify-center">
-                                        <div className="w-full bg-teal-500 rounded-t-lg transition-all" style={{ height: `${(legacyStats.notebooks.good / legacyStats.count) * 100}%` }}></div>
-                                        <span className="absolute bottom-2 text-white font-bold text-sm drop-shadow-md">{legacyStats.notebooks.good}</span>
-                                        <span className="absolute -bottom-6 text-xs font-bold text-gray-600">حسنة</span>
-                                    </div>
-                                    <div className="w-1/3 bg-teal-100 rounded-t-lg relative group h-full flex items-end justify-center">
-                                        <div className="w-full bg-yellow-400 rounded-t-lg transition-all" style={{ height: `${(legacyStats.notebooks.medium / legacyStats.count) * 100}%` }}></div>
-                                        <span className="absolute bottom-2 text-white font-bold text-sm drop-shadow-md">{legacyStats.notebooks.medium}</span>
-                                        <span className="absolute -bottom-6 text-xs font-bold text-gray-600">متوسطة</span>
-                                    </div>
-                                    <div className="w-1/3 bg-teal-100 rounded-t-lg relative group h-full flex items-end justify-center">
-                                        <div className="w-full bg-red-400 rounded-t-lg transition-all" style={{ height: `${(legacyStats.notebooks.bad / legacyStats.count) * 100}%` }}></div>
-                                        <span className="absolute bottom-2 text-white font-bold text-sm drop-shadow-md">{legacyStats.notebooks.bad}</span>
-                                        <span className="absolute -bottom-6 text-xs font-bold text-gray-600">سيئة</span>
-                                    </div>
-                                </div>
-                            </div>
-
                         </div>
                     )}
                 </div>
@@ -688,11 +755,12 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
                             </h3>
                             <div className="flex-1 flex items-end justify-between gap-4 px-2 pb-2 min-h-[150px]">
                                 {studentsByLevel.length > 0 ? studentsByLevel.map((lvl, idx) => {
-                                    const heightPercent = (lvl.count / maxStudentCount) * 100;
+                                    const heightPercent = maxStudentCount > 0 ? (lvl.count / maxStudentCount) * 100 : 0;
+                                    const displayHeight = Math.max(heightPercent, 10);
                                     return (
                                         <div key={idx} className="flex-1 flex flex-col justify-end items-center group relative z-10 h-full">
                                             <div className="mb-1 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold bg-gray-800 text-white px-1.5 py-0.5 rounded absolute -top-8 whitespace-nowrap z-20">{lvl.count} تلميذ</div>
-                                            <div className="w-full bg-blue-100 rounded-t-md hover:bg-blue-300 transition-all duration-500 relative" style={{ height: `${heightPercent > 10 ? heightPercent : 10}%` }}>
+                                            <div className="w-full bg-blue-100 rounded-t-md hover:bg-blue-300 transition-all duration-500 relative" style={{ height: `${displayHeight}%` }}>
                                                 <div className="absolute bottom-1 w-full text-center text-[9px] font-bold text-blue-700">{lvl.count}</div>
                                             </div>
                                             <p className="text-[9px] text-gray-500 mt-2 text-center h-8 leading-tight flex items-center justify-center">{lvl.name.replace('السنة', 'س')}</p>
@@ -718,7 +786,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
                             </div>
                         </div>
 
-                        {/* E. Comparative Analysis */}
+                        {/* E. Comparative Analysis (Enhanced) */}
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 md:col-span-2 flex flex-col md:flex-row gap-8">
                             <div className="flex-1">
                                 <h3 className="font-bold text-lg text-gray-800 mb-2 flex items-center gap-2">
@@ -726,22 +794,24 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
                                     هرم الأقدمية والخبرة
                                 </h3>
                                 <p className="text-xs text-gray-400 mb-6">توزيع الأساتذة حسب سنوات الخدمة</p>
-                                <div className="flex flex-col gap-1 items-center">
+                                <div className="space-y-3">
                                     {seniorityPyramid.slice().reverse().map((group, i) => {
                                         const widthPercent = totalTeachers > 0 ? (group.count / totalTeachers) * 100 : 0;
-                                        const displayWidth = Math.max(widthPercent, 15); 
+                                        const displayWidth = Math.max(widthPercent, 10); 
                                         return (
-                                            <div key={i} className="w-full flex justify-center group relative">
-                                                <div className={`h-8 ${group.color} rounded-sm flex items-center justify-center text-white text-xs font-bold transition-all hover:scale-105 cursor-pointer shadow-sm`} style={{ width: `${displayWidth}%`, minWidth: '120px' }} title={`${group.label}: ${group.count} أستاذ`}>
-                                                   {group.count}
+                                            <div key={i} className="flex items-center gap-3">
+                                                <span className="text-[10px] text-gray-500 w-24 text-right shrink-0">{group.label}</span>
+                                                <div className="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden flex justify-end">
+                                                    <div 
+                                                        className={`h-full ${group.color} flex items-center justify-center text-white text-[10px] font-bold transition-all duration-1000`} 
+                                                        style={{ width: `${displayWidth}%` }}
+                                                    >
+                                                        {group.count > 0 ? group.count : ''}
+                                                    </div>
                                                 </div>
-                                                <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 pr-2 text-[10px] text-gray-400 w-32 hidden md:block">{group.label}</div>
                                             </div>
                                         )
                                     })}
-                                </div>
-                                <div className="flex flex-wrap gap-2 justify-center mt-4 md:hidden">
-                                    {seniorityPyramid.map((g,i) => (<div key={i} className="flex items-center gap-1 text-[9px]"><div className={`w-2 h-2 rounded-full ${g.color}`}></div><span>{g.label}</span></div>))}
                                 </div>
                             </div>
                             <div className="w-px bg-gray-100 hidden md:block"></div>
@@ -750,38 +820,32 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
                                     <GitCompare className="text-cyan-500" size={20} />
                                     تحليل مقارن: الخبرة مقابل التجديد
                                 </h3>
-                                <p className="text-xs text-gray-400 mb-6">مقارنة الأداء البيداغوجي بين الأجيال</p>
-                                <div className="space-y-4">
-                                    <div>
-                                        <div className="flex justify-between items-center mb-1"><span className="text-xs font-bold text-gray-700 flex items-center gap-1"><MonitorSmartphone size={12}/> التجديد والتكنولوجيا</span></div>
-                                        <div className="flex h-3 rounded-full overflow-hidden bg-gray-100 relative">
-                                            <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-white z-10"></div>
-                                            <div className="w-1/2 flex justify-end"><div className="h-full bg-cyan-400" style={{ width: `${comparativeAnalysis.juniors.tech}%` }}></div></div>
-                                            <div className="w-1/2 flex justify-start"><div className="h-full bg-amber-400" style={{ width: `${comparativeAnalysis.seniors.tech}%` }}></div></div>
+                                <p className="text-xs text-gray-400 mb-6">مقارنة الأداء البيداغوجي بين الأجيال (5 معايير)</p>
+                                <div className="space-y-3">
+                                    {[
+                                        { label: 'التكنولوجيا', junior: comparativeAnalysis.juniors.tech, senior: comparativeAnalysis.seniors.tech, icon: MonitorSmartphone },
+                                        { label: 'التحكم الصفي', junior: comparativeAnalysis.juniors.control, senior: comparativeAnalysis.seniors.control, icon: ShieldCheck },
+                                        { label: 'البيداغوجيا', junior: comparativeAnalysis.juniors.pedagogy, senior: comparativeAnalysis.seniors.pedagogy, icon: PenTool },
+                                        { label: 'التخطيط', junior: comparativeAnalysis.juniors.planning, senior: comparativeAnalysis.seniors.planning, icon: ClipboardList },
+                                        { label: 'التقويم', junior: comparativeAnalysis.juniors.evaluation, senior: comparativeAnalysis.seniors.evaluation, icon: CheckSquare }
+                                    ].map((item, idx) => (
+                                        <div key={idx}>
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="text-[10px] font-bold text-gray-700 flex items-center gap-1"><item.icon size={12}/> {item.label}</span>
+                                            </div>
+                                            <div className="flex h-2 rounded-full overflow-hidden bg-gray-100 relative">
+                                                <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-white z-10"></div>
+                                                <div className="w-1/2 flex justify-end"><div className="h-full bg-cyan-400" style={{ width: `${item.junior}%` }}></div></div>
+                                                <div className="w-1/2 flex justify-start"><div className="h-full bg-amber-400" style={{ width: `${item.senior}%` }}></div></div>
+                                            </div>
                                         </div>
-                                        <div className="flex justify-between text-[9px] mt-1 text-gray-400"><span>جدد (أقل من 10)</span><span>قدماء (أكثر من 10)</span></div>
-                                    </div>
-                                    <div>
-                                        <div className="flex justify-between items-center mb-1"><span className="text-xs font-bold text-gray-700 flex items-center gap-1"><ShieldCheck size={12}/> التحكم وتسيير الصف</span></div>
-                                        <div className="flex h-3 rounded-full overflow-hidden bg-gray-100 relative">
-                                            <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-white z-10"></div>
-                                            <div className="w-1/2 flex justify-end"><div className="h-full bg-cyan-400" style={{ width: `${comparativeAnalysis.juniors.control}%` }}></div></div>
-                                            <div className="w-1/2 flex justify-start"><div className="h-full bg-amber-400" style={{ width: `${comparativeAnalysis.seniors.control}%` }}></div></div>
-                                        </div>
-                                    </div>
-                                     <div>
-                                        <div className="flex justify-between items-center mb-1"><span className="text-xs font-bold text-gray-700 flex items-center gap-1"><PenTool size={12}/> الهندسة البيداغوجية</span></div>
-                                        <div className="flex h-3 rounded-full overflow-hidden bg-gray-100 relative">
-                                            <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-white z-10"></div>
-                                            <div className="w-1/2 flex justify-end"><div className="h-full bg-cyan-400" style={{ width: `${comparativeAnalysis.juniors.pedagogy}%` }}></div></div>
-                                            <div className="w-1/2 flex justify-start"><div className="h-full bg-amber-400" style={{ width: `${comparativeAnalysis.seniors.pedagogy}%` }}></div></div>
-                                        </div>
-                                    </div>
+                                    ))}
+                                    <div className="flex justify-between text-[9px] mt-2 text-gray-400 px-2"><span>جدد (أقل من 10)</span><span>قدماء (أكثر من 10)</span></div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* H. Marks Histogram */}
+                        {/* H. Marks Histogram (Fixed Labels) */}
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
                             <h3 className="font-bold text-lg text-gray-800 mb-6 flex items-center gap-2">
                                 <Award className="text-blue-500" size={20} />
@@ -798,7 +862,14 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
                                     );
                                 })}
                             </div>
-                            <div className="flex justify-between text-[10px] text-gray-500 mt-2 px-1"><span>ضعيف</span><span>متوسط</span><span>جيد</span><span>ممتاز</span></div>
+                            {/* Fixed 5 Labels Grid */}
+                            <div className="grid grid-cols-5 text-[9px] text-gray-500 mt-2 text-center font-bold">
+                                <span>ضعيف</span>
+                                <span>متوسط</span>
+                                <span>جيد</span>
+                                <span>جيد جداً</span>
+                                <span>ممتاز</span>
+                            </div>
                             <div className="mt-6 pt-4 border-t border-dashed">
                                 <h4 className="text-xs font-bold text-gray-500 mb-3">الوضعيات المهنية</h4>
                                 <div className="flex items-center justify-center gap-6">

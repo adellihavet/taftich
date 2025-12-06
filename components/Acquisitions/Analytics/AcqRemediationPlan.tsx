@@ -10,9 +10,9 @@ interface Props {
     onClose: () => void;
 }
 
-// --- KNOWLEDGE BASE: Linking Year 2 Failures to Year 1 Roots ---
+// --- KNOWLEDGE BASE: Linking Failures to Roots ---
 const REMEDIATION_KB: Record<string, { origin: string; cause: string; activity: string }> = {
-    // ARABIC MAPPINGS
+    // YEAR 2 ARABIC MAPPINGS
     'فك ترميز': {
         origin: 'السنة الأولى (المقاطع 1-4)',
         cause: 'عدم تثبيت الحروف وعلاقتها بالأصوات (الوعي الصوتي) في السنة الأولى.',
@@ -34,7 +34,7 @@ const REMEDIATION_KB: Record<string, { origin: string; cause: string; activity: 
         activity: 'الإملاء المنظور، املأ الفراغ بالحرف الناقص.'
     },
     
-    // MATH MAPPINGS
+    // YEAR 2 MATH MAPPINGS
     'نظام العد': {
         origin: 'السنة الأولى (الأعداد إلى 99)',
         cause: 'خلل في مفهوم "المراتب" (وحدات/عشرات) وعدم إدراك قيمة الرقم حسب موقعه.',
@@ -54,6 +54,70 @@ const REMEDIATION_KB: Record<string, { origin: string; cause: string; activity: 
         origin: 'السنة الأولى',
         cause: 'الخلط بين المعنى الرياضي للجمع (الزيادة) والطرح (النقصان).',
         activity: 'مسرحة الوضعيات، لعب الأدوار (بائع ومشتري).'
+    },
+
+    // YEAR 4 ARABIC MAPPINGS
+    'التحليل النحوي': {
+        origin: 'السنة الثالثة (الجملة البسيطة)',
+        cause: 'عدم التمييز بين أنواع الكلمة (اسم/فعل/حرف) في سياق الجملة.',
+        activity: 'ألعاب تصنيف الكلمات، التلوين داخل النص، جداول الإعراب المبسطة.'
+    },
+    'التحويل الصرفي': {
+        origin: 'السنة الثالثة (الضمائر)',
+        cause: 'عدم تثبيت جدول التصريف الأساسي (الماضي/المضارع) مع الضمائر المنفصلة.',
+        activity: 'التحويل الشفوي السريع (أنا كتبت -> نحن ...)، مسرحة الضمائر.'
+    },
+    'قواعد اللغة': {
+        origin: 'السنة الثالثة (التراكيب)',
+        cause: 'الخلط بين الظواهر النحوية المتشابهة (الصفة والخبر، الفاعل والمفعول به).',
+        activity: 'ملء الفراغات، التشكيل (الضبط بالشكل)، إعادة ترتيب الجمل.'
+    },
+    'ترابط الأفكار': {
+        origin: 'السنة الثالثة (التعبير الكتابي)',
+        cause: 'نقص في أدوات الربط (حروف العطف، الظروف) وغياب الهيكلة (مقدمة/عرض/خاتمة).',
+        activity: 'ترتيب جمل مشوشة لتكوين قصة، الكتابة المرحلية (إكمال قصة ناقصة).'
+    },
+    'جودة المنتج': {
+        origin: 'المرحلة الأولى للتعليم الابتدائي',
+        cause: 'عدم احترام مقاييس الحروف، التشطيب، غياب علامات الترقيم.',
+        activity: 'النقل، الخط، نسخ نصوص قصيرة مع التركيز على الجمالية.'
+    },
+    'إدراج قيمة': {
+        origin: 'التربية الإسلامية/المدنية',
+        cause: 'صعوبة في استنتاج العبرة أو المغزى من السند (النص).',
+        activity: 'مناقشة السلوكات (صحيح/خطأ)، استخراج القيم من قصص قصيرة.'
+    },
+
+    // YEAR 4 MATH MAPPINGS (NEW)
+    'الأعداد العشرية': {
+        origin: 'السنة الثالثة (الكسور)',
+        cause: 'عدم استيعاب العلاقة بين الكسر والعدد العشري، أو الخلط في القيمة المكانية للأجزاء (أعشار/أجزاء مائة).',
+        activity: 'استخدام المستقيم المدرج، تحويل الكسور العشرية إلى أعداد، جدول المراتب الممتد.'
+    },
+    'الكسور': {
+        origin: 'السنة الثالثة (مفهوم الكسر)',
+        cause: 'صعوبة في تمثيل الكسر (الجزء من الكل) أو مقارنة الكسور.',
+        activity: 'تمثيل الكسور بالأشرطة والدوائر، طي الورق، ألعاب التلوين.'
+    },
+    'الفضاء والهندسة': {
+        origin: 'السنة الثالثة (الأشكال المألوفة)',
+        cause: 'نقص في المهارات اليدوية (استعمال المسطرة والكوس) أو الخلط بين خصائص الأشكال.',
+        activity: 'الرسم على الورق المرصوف، الإنشاءات الهندسية البسيطة، صنع مجسمات.'
+    },
+    'المساحة والمحيط': {
+        origin: 'السنة الثالثة (الأطوال)',
+        cause: 'الخلط بين مفهوم "الإطار" (المحيط) و"السطح" (المساحة)، أو عدم حفظ جداول التحويل.',
+        activity: 'قياس محيط الطاولة بالخيط، رصف الأشكال بمربعات الوحدة.'
+    },
+    'التناسبية': {
+        origin: 'السنة الثالثة (الضرب)',
+        cause: 'ضعف في جدول الضرب أو عدم إدراك العلاقة الخطية (المرور إلى الوحدة).',
+        activity: 'جداول بسيطة من الحياة اليومية (الثمن/الكمية)، البحث عن معامل التناسبية.'
+    },
+    'اختيار الخوارزمية': {
+        origin: 'مرحلة بناء العمليات الأربع',
+        cause: 'يفهم النص لغوياً لكن لا يربط الكلمات المفتاحية بالعملية المناسبة (الفرق = طرح، التوزيع = قسمة).',
+        activity: 'تمارين "اختر العملية المناسبة دون حساب"، ربط المشكلات بمخططات.'
     }
 };
 
@@ -122,7 +186,8 @@ const AcqRemediationPlan: React.FC<Props> = ({ students, subjectDef, contextName
     }, [students, subjectDef]);
 
     const getRemediationInfo = (label: string) => {
-        // Simple fuzzy match
+        // Fuzzy match logic
+        // We iterate keys and check if label contains the key
         const key = Object.keys(REMEDIATION_KB).find(k => label.includes(k));
         return key ? REMEDIATION_KB[key] : {
             origin: 'السنة السابقة',
@@ -162,7 +227,7 @@ const AcqRemediationPlan: React.FC<Props> = ({ students, subjectDef, contextName
                 {/* Body */}
                 <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-white print:p-0 print:overflow-visible">
                     
-                    {/* 1. Efficiency Index (Speedometer Logic) */}
+                    {/* 1. Efficiency Index */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center border-b border-slate-100 pb-8">
                         <div>
                             <h3 className="font-bold text-lg text-slate-800 mb-2 flex items-center gap-2">

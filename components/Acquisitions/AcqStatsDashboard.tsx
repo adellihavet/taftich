@@ -4,24 +4,24 @@ import { AcqClassRecord, AcqFilterState } from '../../types/acquisitions';
 import { BarChart2, PieChart, FileText } from 'lucide-react';
 import AcqYear2ArabicStats from './Analytics/AcqYear2ArabicStats';
 import AcqYear2MathStats from './Analytics/AcqYear2MathStats';
+import AcqYear4ArabicStats from './Analytics/AcqYear4ArabicStats';
+import AcqYear4MathStats from './Analytics/AcqYear4MathStats';
+import AcqYear5ArabicStats from './Analytics/AcqYear5ArabicStats';
 import AcqTeacherProfile from './Analytics/AcqTeacherProfile';
 import AcqStructuredAnalysis from './Analytics/AcqStructuredAnalysis';
 
 interface AcqStatsDashboardProps {
     records: AcqClassRecord[];
     availableSchools: string[];
-    filters: AcqFilterState; // Receive filters from parent
+    filters: AcqFilterState; 
 }
 
 const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters }) => {
-    // Destructure filters for easier access
     const { scope, selectedSchool, selectedLevel, selectedClass, selectedSubject } = filters;
     const [showStructuredAnalysis, setShowStructuredAnalysis] = useState(false);
 
-    // --- 1. Filter Data for SPECIFIC Subject Analysis (The standard view) ---
     const filteredRecords = useMemo(() => {
         return records.filter(r => {
-            // Apply Filters Logic
             if (selectedLevel && r.level !== selectedLevel) return false;
             if (selectedSubject && r.subject !== selectedSubject) return false;
             
@@ -36,7 +36,6 @@ const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters 
         });
     }, [records, scope, selectedSchool, selectedLevel, selectedClass, selectedSubject]);
 
-    // --- 2. Filter Data for CROSS-SUBJECT Analysis (Teacher Profile) ---
     const classSiblingRecords = useMemo(() => {
         if (scope !== 'class' || !selectedSchool || !selectedClass || !selectedLevel) return [];
         return records.filter(r => 
@@ -46,16 +45,11 @@ const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters 
         );
     }, [records, scope, selectedSchool, selectedClass, selectedLevel]);
 
-    // --- 3. Records for Structured Analysis (Context-Aware) ---
-    // If we are in "District" mode with no specific filters, we use ALL records to give a global view.
-    // Otherwise we use the filtered subset.
     const analysisRecords = useMemo(() => {
-        if (scope === 'district' && !selectedLevel) return records; // All district data
+        if (scope === 'district' && !selectedLevel) return records; 
         return filteredRecords;
     }, [scope, selectedLevel, records, filteredRecords]);
 
-
-    // --- Validation to show content ---
     const isReadyToAnalyze = useMemo(() => {
         if (!selectedLevel || !selectedSubject) return false;
         if (scope === 'school' && !selectedSchool) return false;
@@ -66,7 +60,6 @@ const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters 
     return (
         <div className="flex flex-col h-full bg-slate-50/50">
             
-            {/* --- GLOBAL ACTION BAR --- */}
             <div className="bg-white p-4 border-b flex justify-between items-center shadow-sm shrink-0">
                 <div className="text-sm text-slate-500">
                     <span className="font-bold text-slate-700">النطاق الحالي:</span> {scope === 'district' ? 'المقاطعة' : scope === 'school' ? selectedSchool : `${selectedSchool} / ${selectedClass}`}
@@ -81,7 +74,6 @@ const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters 
                 </button>
             </div>
 
-            {/* --- MODAL FOR STRUCTURED ANALYSIS --- */}
             {showStructuredAnalysis && (
                 <AcqStructuredAnalysis 
                     records={analysisRecords}
@@ -91,12 +83,10 @@ const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters 
                 />
             )}
 
-            {/* Main Content Area */}
             <div className="flex-1 p-6 md:p-8 overflow-y-auto">
                 {isReadyToAnalyze ? (
                     <div className="max-w-[1600px] mx-auto animate-in zoom-in-95 duration-500">
                         
-                        {/* --- EXPERT TEACHER PROFILE (Only in Class Scope) --- */}
                         {scope === 'class' && (
                             <AcqTeacherProfile 
                                 records={classSiblingRecords}
@@ -105,7 +95,6 @@ const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters 
                             />
                         )}
 
-                        {/* --- SPECIFIC SUBJECT ANALYSIS --- */}
                         {selectedLevel === '2AP' && selectedSubject.includes('العربية') ? (
                             <AcqYear2ArabicStats 
                                 records={filteredRecords} 
@@ -118,8 +107,25 @@ const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters 
                                 scope={scope}
                                 contextName={scope === 'district' ? 'المقاطعة' : scope === 'school' ? selectedSchool : `${selectedSchool} - ${selectedClass}`}
                             />
+                        ) : selectedLevel === '4AP' && selectedSubject.includes('العربية') ? (
+                            <AcqYear4ArabicStats
+                                records={filteredRecords}
+                                scope={scope}
+                                contextName={scope === 'district' ? 'المقاطعة' : scope === 'school' ? selectedSchool : `${selectedSchool} - ${selectedClass}`}
+                            />
+                        ) : selectedLevel === '4AP' && selectedSubject.includes('الرياضيات') ? (
+                            <AcqYear4MathStats
+                                records={filteredRecords}
+                                scope={scope}
+                                contextName={scope === 'district' ? 'المقاطعة' : scope === 'school' ? selectedSchool : `${selectedSchool} - ${selectedClass}`}
+                            />
+                        ) : selectedLevel === '5AP' && selectedSubject.includes('العربية') ? (
+                            <AcqYear5ArabicStats
+                                records={filteredRecords}
+                                scope={scope}
+                                contextName={scope === 'district' ? 'المقاطعة' : scope === 'school' ? selectedSchool : `${selectedSchool} - ${selectedClass}`}
+                            />
                         ) : (
-                            // Fallback for not-yet-implemented subjects
                             <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden min-h-[400px] flex flex-col">
                                 <div className="bg-slate-900 text-white p-6 flex justify-between items-start">
                                     <div>
@@ -139,7 +145,14 @@ const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters 
                                     <p className="text-slate-500">
                                         النموذج التحليلي الخاص بـ <b>{selectedSubject} - {selectedLevel}</b> قيد الإنجاز.
                                         <br/>
-                                        حالياً، النظام يدعم التحليل التفصيلي لـ <b>اللغة العربية (السنة الثانية)</b> و <b>الرياضيات (السنة الثانية)</b>.
+                                        حالياً، النظام يدعم التحليل التفصيلي لـ:
+                                        <ul className="mt-2 text-sm text-slate-600 list-disc list-inside">
+                                            <li>اللغة العربية (السنة الثانية)</li>
+                                            <li>الرياضيات (السنة الثانية)</li>
+                                            <li>اللغة العربية (السنة الرابعة)</li>
+                                            <li>الرياضيات (السنة الرابعة)</li>
+                                            <li>اللغة العربية (السنة الخامسة)</li>
+                                        </ul>
                                     </p>
                                 </div>
                             </div>
@@ -147,17 +160,15 @@ const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters 
 
                     </div>
                 ) : (
-                    /* Empty State */
                     <div className="h-full flex flex-col items-center justify-center text-slate-400 pb-20">
                         <div className="w-32 h-32 bg-slate-200 rounded-full flex items-center justify-center mb-6 opacity-50 animate-pulse">
                             <PieChart size={64} className="text-slate-400" />
                         </div>
                         <h3 className="text-xl font-bold text-slate-600 mb-2">بانتظار تحديد معايير التحليل</h3>
                         <p className="text-slate-400 max-w-sm text-center mb-6">
-                            يرجى استخدام <b>القائمة الجانبية</b> لاختيار النطاق، المدرسة، والمادة لعرض التحليل الدقيق.
+                            يرجى استخدام <b>القائمة العلوية</b> لاختيار النطاق، المدرسة، والمادة لعرض التحليل الدقيق.
                         </p>
                         
-                        {/* Prompt to use the new feature regardless of filters */}
                         <button 
                             onClick={() => setShowStructuredAnalysis(true)}
                             className="bg-white border border-indigo-200 text-indigo-600 px-6 py-3 rounded-xl hover:bg-indigo-50 transition-colors font-bold text-sm shadow-sm flex items-center gap-2"

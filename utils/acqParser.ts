@@ -44,7 +44,7 @@ const isSummaryRow = (text: string): boolean => {
 
 /**
  * Universal Parser that doesn't rely on headers.
- * It hunts for rows that look like "Student Data".
+ * It hunts for rows that look "Student Data".
  */
 export const parseAcqExcel = (data: ArrayBuffer, level: string, subject: string): AcqStudent[] => {
     if (typeof XLSX === 'undefined') {
@@ -154,22 +154,90 @@ export const parseAcqExcel = (data: ArrayBuffer, level: string, subject: string)
             } 
             // Case B: 2AP Math (6 Criteria expected)
             else if (level === '2AP' && subject.includes('الرياضيات')) {
-                // Comp 1 (Control Numbers) = 2 criteria
-                // Comp 2 (Problem Solving) = 4 criteria
-                if (grades.length >= 3) { // Allow partial
+                if (grades.length >= 3) {
                     students.push({
                         id: Math.random().toString(36).substr(2, 9),
                         fullName: nameCandidate,
                         results: {
                             'control_numbers': {
-                                1: grades[0] || null, // Resources
-                                2: grades[1] || null  // Calculation (Add/Sub)
+                                1: grades[0] || null,
+                                2: grades[1] || null
                             },
                             'problem_solving': {
-                                1: grades[2] || null, // Understanding
-                                2: grades[3] || null, // Consistency
-                                3: grades[4] || null, // Tools
-                                4: grades[5] || null  // Communication
+                                1: grades[2] || null,
+                                2: grades[3] || null,
+                                3: grades[4] || null,
+                                4: grades[5] || null
+                            }
+                        }
+                    });
+                }
+            }
+            // Case C: 4AP Arabic (19 Criteria expected)
+            else if (level === '4AP' && subject.includes('العربية')) {
+                if (grades.length >= 10) { 
+                    students.push({
+                        id: Math.random().toString(36).substr(2, 9),
+                        fullName: nameCandidate,
+                        results: {
+                            'oral_comms': {
+                                1: grades[0] || null, 2: grades[1] || null, 3: grades[2] || null, 4: grades[3] || null, 5: grades[4] || null
+                            },
+                            'reading_perf': {
+                                1: grades[5] || null, 2: grades[6] || null, 3: grades[7] || null, 4: grades[8] || null
+                            },
+                            'written_comp': {
+                                1: grades[9] || null, 2: grades[10] || null, 3: grades[11] || null, 4: grades[12] || null, 5: grades[13] || null
+                            },
+                            'written_prod': {
+                                1: grades[14] || null, 2: grades[15] || null, 3: grades[16] || null, 4: grades[17] || null, 5: grades[18] || null
+                            }
+                        }
+                    });
+                }
+            }
+            // Case D: 4AP Math (7 Criteria expected)
+            else if (level === '4AP' && subject.includes('الرياضيات')) {
+                if (grades.length >= 4) {
+                    students.push({
+                        id: Math.random().toString(36).substr(2, 9),
+                        fullName: nameCandidate,
+                        results: {
+                            'control_resources': {
+                                1: grades[0] || null,
+                                2: grades[1] || null,
+                                3: grades[2] || null
+                            },
+                            'methodological_solving': {
+                                1: grades[3] || null,
+                                2: grades[4] || null,
+                                3: grades[5] || null,
+                                4: grades[6] || null
+                            }
+                        }
+                    });
+                }
+            }
+            // Case E: 5AP Arabic (26 Criteria expected)
+            else if (level === '5AP' && subject.includes('العربية')) {
+                if (grades.length >= 15) { // Threshold to accept row
+                    students.push({
+                        id: Math.random().toString(36).substr(2, 9),
+                        fullName: nameCandidate,
+                        results: {
+                            'oral_comms': {
+                                1: grades[0] || null, 2: grades[1] || null, 3: grades[2] || null, 4: grades[3] || null, 5: grades[4] || null, 6: grades[5] || null
+                            },
+                            'reading_perf': {
+                                1: grades[6] || null, 2: grades[7] || null, 3: grades[8] || null, 4: grades[9] || null
+                            },
+                            'written_comp': {
+                                1: grades[10] || null, 2: grades[11] || null, 3: grades[12] || null, 4: grades[13] || null, 
+                                5: grades[14] || null, 6: grades[15] || null, 7: grades[16] || null, 8: grades[17] || null, 9: grades[18] || null
+                            },
+                            'written_prod': {
+                                1: grades[19] || null, 2: grades[20] || null, 3: grades[21] || null, 4: grades[22] || null, 
+                                5: grades[23] || null, 6: grades[24] || null, 7: grades[25] || null
                             }
                         }
                     });
