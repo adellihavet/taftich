@@ -1,8 +1,14 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { AcqClassRecord } from '../../../types/acquisitions';
 import { YEAR2_ARABIC_DEF } from '../../../constants/acqYear2Arabic';
-import { BarChart3, Target, AlertTriangle, CheckCircle2, TrendingUp, LayoutGrid, Award, ArrowUpRight, ArrowDownRight, School, Scale, Activity, X, Info, HelpCircle, GitCompare, BookOpen, PenTool, User, Stethoscope, BrainCircuit, Microscope, Calculator, Puzzle, FileText } from 'lucide-react';
+import { 
+    BarChart3, Target, AlertTriangle, CheckCircle2, TrendingUp, LayoutGrid, Award, ArrowUpRight, 
+    ArrowDownRight, School, Scale, Activity, X, Info, HelpCircle, GitCompare, BookOpen, PenTool, 
+    User, Stethoscope, BrainCircuit, Microscope, Calculator, Puzzle, FileText, Maximize2, Minimize2, 
+    Edit, Save, RotateCcw, Ruler, ChevronRight
+} from 'lucide-react';
+import VoiceTextarea from '../../VoiceTextarea';
 
 interface Props {
     records: AcqClassRecord[];
@@ -10,13 +16,46 @@ interface Props {
     contextName: string;
 }
 
+// Types for Analysis Structure
+type AnalysisSection = 'distribution' | 'homogeneity' | 'matrix';
+interface AnalysisContent {
+    reading: string;
+    diagnosis: string;
+    recommendation: string;
+}
+
+// Static Definitions for Focus Mode (Specific to Year 2)
+const METRIC_DEFINITIONS: Record<AnalysisSection, { title: string, concept: string, method: string }> = {
+    distribution: {
+        title: "توزيع التحكم (الكمي والنوعي)",
+        concept: "مؤشر إحصائي يقيس مدى اعتدال النتائج (منحنى غاوس). الوضع الطبيعي هو تمركز الأغلبية في الوسط (ب)، مع قلة في الامتياز (أ) وقلة في التعثر (ج/د).",
+        method: "حساب نسب التلاميذ في كل مستوى (أ، ب، ج، د) ومقارنة كتلة التحكم (أ+ب) بكتلة التعثر (ج+د)."
+    },
+    homogeneity: {
+        title: "مؤشر التجانس",
+        concept: "مقياس يحدد مدى تقارب أو تباعد مستويات التلاميذ داخل الفوج الواحد. كلما كان الرقم صغيراً، كان القسم متجانساً.",
+        method: "حساب الانحراف المعياري (Standard Deviation) لمعدلات التلاميذ. (أقل من 15: متجانس جداً / أكثر من 25: مشتت)."
+    },
+    matrix: {
+        title: "مصفوفة التوازن (شفوي/كتابي)",
+        concept: "أداة تشخيصية تقارن كفاءة 'الأداء القرائي' (فك الرمز/النطق) بكفاءة 'فهم المكتوب' (المعنى). تكشف عن نوعية التعلم (هل هو حفظ آلي أم فهم عميق).",
+        method: "تصنيف التلاميذ في 4 خانات بناءً على تقاطع معدل الشفوي ومعدل الكتابي (أعلى/أقل من 50%)."
+    }
+};
+
 const AcqYear2ArabicStats: React.FC<Props> = ({ records, scope, contextName }) => {
     
-    // State for the General Insight Modal
-    const [activeInsight, setActiveInsight] = useState<{ title: string; definition: string; pedagogicalRef: string; content: React.ReactNode } | null>(null);
+    // State for Expanded View (Focus Mode)
+    const [expandedSection, setExpandedSection] = useState<string | null>(null);
     
-    // State for Custom Tooltips (Matrix)
+    // State for Tooltips
+    const [hoveredData, setHoveredData] = useState<{ x: number, y: number, text: string, title?: string } | null>(null);
     const [hoveredMatrixZone, setHoveredMatrixZone] = useState<string | null>(null);
+
+    // State for Manual Override
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [editingSection, setEditingSection] = useState<AnalysisSection | null>(null);
+    const [customAnalysis, setCustomAnalysis] = useState<Record<string, AnalysisContent>>({});
 
     // State for Individual Student Diagnosis
     const [selectedStudentDiag, setSelectedStudentDiag] = useState<{ 
@@ -29,9 +68,35 @@ const AcqYear2ArabicStats: React.FC<Props> = ({ records, scope, contextName }) =
         clickedCriterion?: { label: string, advice: string };
     } | null>(null);
 
-    // --- 1. DATA PREPARATION ---
+    // Load custom analysis
+    useEffect(() => {
+        const key = `mufattish_analysis_y2_arabic_${contextName}_${scope}`;
+        const saved = localStorage.getItem(key);
+        if (saved) {
+            try {
+                setCustomAnalysis(JSON.parse(saved));
+            } catch (e) {
+                console.error("Failed to load custom analysis", e);
+            }
+        }
+    }, [contextName, scope]);
 
-    // A. Flatten Students
+    const handleSaveAnalysis = (section: string, data: AnalysisContent) => {
+        const newAnalysis = { ...customAnalysis, [section]: data };
+        setCustomAnalysis(newAnalysis);
+        localStorage.setItem(`mufattish_analysis_y2_arabic_${contextName}_${scope}`, JSON.stringify(newAnalysis));
+        setEditingSection(null);
+    };
+
+    const handleResetAnalysis = (section: string) => {
+        const newAnalysis = { ...customAnalysis };
+        delete newAnalysis[section];
+        setCustomAnalysis(newAnalysis);
+        localStorage.setItem(`mufattish_analysis_y2_arabic_${contextName}_${scope}`, JSON.stringify(newAnalysis));
+    };
+
+    // --- 1. DATA PREPARATION (PRESERVED) ---
+
     const allStudents = useMemo(() => {
         return records.flatMap(r => r.students.map(s => ({ 
             ...s, 
@@ -55,11 +120,9 @@ const AcqYear2ArabicStats: React.FC<Props> = ({ records, scope, contextName }) =
             let totalPoints = 0;
             let maxPoints = 0;
             
-            // Comp 1: Reading (Oral)
             let oralPoints = 0;
             let oralMax = 0;
             
-            // Comp 2: Writing (Comprehension)
             let writtenPoints = 0;
             let writtenMax = 0;
 
@@ -87,47 +150,6 @@ const AcqYear2ArabicStats: React.FC<Props> = ({ records, scope, contextName }) =
             return { ...s, percent, oralPct, writtenPct };
         });
     }, [allStudents]);
-
-    // C. Group Data (Ranking)
-    const groupedData = useMemo(() => {
-        const groups: Record<string, { 
-            name: string; 
-            stats: { A: number, B: number, C: number, D: number, total: number };
-            scores: { reading: number, writing: number, global: number }; 
-        }> = {};
-
-        allStudents.forEach(s => {
-            const key = scope === 'district' ? s.schoolName : s.className;
-            if (!groups[key]) {
-                groups[key] = { 
-                    name: key, 
-                    stats: { A: 0, B: 0, C: 0, D: 0, total: 0 },
-                    scores: { reading: 0, writing: 0, global: 0 }
-                };
-            }
-        });
-
-        // Recalculate averages per group
-        const groupScoresCalc: Record<string, {orals: number[], writtens: number[], globals: number[]}> = {};
-        studentAnalysis.forEach(s => {
-            const key = scope === 'district' ? s.schoolName : s.className;
-            if(!groupScoresCalc[key]) groupScoresCalc[key] = {orals: [], writtens: [], globals: []};
-            groupScoresCalc[key].orals.push(s.oralPct);
-            groupScoresCalc[key].writtens.push(s.writtenPct);
-            groupScoresCalc[key].globals.push(s.percent);
-        });
-
-        Object.keys(groups).forEach(key => {
-            const data = groupScoresCalc[key];
-            if (data && data.globals.length > 0) {
-                groups[key].scores.global = data.globals.reduce((a,b)=>a+b,0) / data.globals.length;
-                groups[key].scores.reading = data.orals.reduce((a,b)=>a+b,0) / data.orals.length;
-                groups[key].scores.writing = data.writtens.reduce((a,b)=>a+b,0) / data.writtens.length;
-            }
-        });
-
-        return Object.values(groups).sort((a, b) => b.scores.global - a.scores.global);
-    }, [allStudents, studentAnalysis, scope]);
 
     // D. Global KPIs
     const globalKPIs = useMemo(() => {
@@ -166,12 +188,7 @@ const AcqYear2ArabicStats: React.FC<Props> = ({ records, scope, contextName }) =
         return counts;
     }, [allStudents]);
 
-    // G. Matrix Data (Oral vs Written)
-    // Logic:
-    // Q1 (Top Right): High Oral & High Written (Green) -> Balanced High
-    // Q2 (Top Left): High Oral & Low Written (Yellow/Blue) -> Fluent but poor comprehension (Reading Machine)
-    // Q3 (Bottom Left): Low Oral & Low Written (Red) -> Global Struggle
-    // Q4 (Bottom Right): Low Oral & High Written (Orange) -> Understands but poor decoding (Dyslexic profile?)
+    // G. Matrix Data
     const performanceMatrix = useMemo(() => {
         const counts = { balanced_high: 0, rote_reading: 0, struggling: 0, decoding_issue: 0, total: 0 };
         studentAnalysis.forEach(s => {
@@ -179,9 +196,9 @@ const AcqYear2ArabicStats: React.FC<Props> = ({ records, scope, contextName }) =
             const highWritten = s.writtenPct >= 50;
             
             if (highOral && highWritten) counts.balanced_high++;
-            else if (highOral && !highWritten) counts.rote_reading++; // Good voice, bad meaning
-            else if (!highOral && !highWritten) counts.struggling++; // Bad both
-            else counts.decoding_issue++; // Bad voice, good meaning
+            else if (highOral && !highWritten) counts.rote_reading++;
+            else if (!highOral && !highWritten) counts.struggling++;
+            else counts.decoding_issue++;
             
             counts.total++;
         });
@@ -204,144 +221,119 @@ const AcqYear2ArabicStats: React.FC<Props> = ({ records, scope, contextName }) =
     }, [allStudents]);
 
 
-    // --- HANDLERS FOR GENERAL INSIGHTS ---
-    const showDistributionInsight = () => {
-        const a = gradeDistribution.A;
-        const b = gradeDistribution.B;
-        const cd = gradeDistribution.C + gradeDistribution.D;
-        const total = gradeDistribution.total;
-        
-        setActiveInsight({
-            title: "منحنى التوزيع الطبيعي",
-            definition: "مؤشر إحصائي يقيس مدى اعتدال النتائج. الوضع الطبيعي هو أن تتمركز الأغلبية في الوسط (ب)، مع قلة في الامتياز (أ) وقلة في التعثر (ج/د).",
-            pedagogicalRef: "يعكس هذا المؤشر 'صورة القسم'. التوزيع الطبيعي يفترض وجود أغلبية في الوسط. الانحراف نحو اليسار (تعثر) يتطلب مراجعة استراتيجيات التدريس الأساسية.",
-            content: (
-                <div className="space-y-4">
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                        <div className="bg-emerald-500/20 p-2 rounded border border-emerald-500/50">
-                            <span className="block text-2xl font-bold text-emerald-400">{Math.round((a/total)*100)}%</span>
-                            <span className="text-[10px] text-emerald-200">تحكم أقصى</span>
-                        </div>
-                        <div className="bg-blue-500/20 p-2 rounded border border-blue-500/50">
-                            <span className="block text-2xl font-bold text-blue-400">{Math.round((b/total)*100)}%</span>
-                            <span className="text-[10px] text-blue-200">تحكم مقبول</span>
-                        </div>
-                        <div className="bg-red-500/20 p-2 rounded border border-red-500/50">
-                            <span className="block text-2xl font-bold text-red-400">{Math.round((cd/total)*100)}%</span>
-                            <span className="text-[10px] text-red-200">تعثر (ج+د)</span>
-                        </div>
-                    </div>
-                    <div className="p-3 bg-white/5 rounded border border-white/10 text-sm leading-relaxed text-gray-300 font-medium">
-                        {a + b > cd 
-                            ? "المنحنى يميل نحو الإيجابية (تحكم جيد). هذا يعكس استيعاباً جيداً للموارد، لكن يجب الحذر من تضخم العلامات إذا كانت نسبة التميز مرتفعة جداً."
-                            : "المنحنى يميل نحو السلبية (تعثر). وجود كتلة كبيرة في خانة التعثر يستدعي مراجعة طرائق التدريس الأساسية."}
-                    </div>
-                </div>
-            )
+    // --- ANALYSIS GENERATION (PRESERVED LOGIC) ---
+
+    const getDefaultAnalysis = (section: string): AnalysisContent => {
+        if (section === 'distribution') {
+            const a = gradeDistribution.A;
+            const b = gradeDistribution.B;
+            const cd = gradeDistribution.C + gradeDistribution.D;
+            const total = gradeDistribution.total || 1;
+            
+            let diagnosis = a + b > cd 
+                ? "المنحنى يميل نحو الإيجابية (تحكم جيد). هذا يعكس استيعاباً جيداً للموارد، لكن يجب الحذر من تضخم العلامات إذا كانت نسبة التميز مرتفعة جداً."
+                : "المنحنى يميل نحو السلبية (تعثر). وجود كتلة كبيرة في خانة التعثر يستدعي مراجعة طرائق التدريس الأساسية.";
+
+            return {
+                reading: `تحكم أقصى: ${Math.round((a/total)*100)}% | تحكم مقبول: ${Math.round((b/total)*100)}% | تعثر: ${Math.round((cd/total)*100)}%`,
+                diagnosis: diagnosis,
+                recommendation: a + b > cd ? "الحفاظ على النسق الحالي مع إثراء الرصيد اللغوي." : "تفعيل المعالجة البيداغوجية الفورية."
+            };
+        }
+
+        if (section === 'homogeneity') {
+            let diagnosis = "";
+            if (homogeneityIndex < 15) diagnosis = "فئة متجانسة جداً: الفوارق بين التلاميذ بسيطة. هذا الوضع يسهل التدريس الجماعي الموحد.";
+            else if (homogeneityIndex < 25) diagnosis = "فئة عادية (متوسطة التجانس): توجد فوارق طبيعية بين التلاميذ، تسمح بالمنافسة والتعلم بالأقران.";
+            else diagnosis = "فئة مشتتة (غير متجانسة): توجد هوة كبيرة بين النجباء والمتعثرين. التدريس الموحد سيفشل هنا.";
+
+            return {
+                reading: `قيمة المؤشر: ${homogeneityIndex.toFixed(2)}`,
+                diagnosis: diagnosis,
+                recommendation: homogeneityIndex > 25 ? "اعتماد البيداغوجيا الفارقية (التفويج) لتقليص الفوارق." : "الاستمرار في التدريس الجماعي مع دعم فردي."
+            };
+        }
+
+        if (section === 'matrix') {
+            const total = performanceMatrix.total || 1;
+            const q_rote = Math.round((performanceMatrix.rote_reading / total) * 100);
+            const q_decoding = Math.round((performanceMatrix.decoding_issue / total) * 100);
+            
+            let diagnosis = q_rote > 20 
+                ? "تحذير: نسبة عالية من التلاميذ يعانون من 'القرائية الآلية'. هم يركزون على التهجئة والنطق الصحيح دون الوصول للمعنى."
+                : "التوازن بين القراءة والفهم مقبول لدى الأغلبية.";
+
+            return {
+                reading: `قراءة آلية: ${q_rote}% | تعثر في فك الرمز: ${q_decoding}%`,
+                diagnosis: diagnosis,
+                recommendation: q_rote > 20 ? "التركيز على أنشطة الفهم الضمني والاستنتاج." : "تعزيز مكتسبات الطلاقة والفهم."
+            };
+        }
+        return { reading: '', diagnosis: '', recommendation: '' };
+    };
+
+    const getAnalysis = (section: string) => {
+        return customAnalysis[section] || getDefaultAnalysis(section);
+    };
+
+    // --- HELPERS ---
+    
+    const handleMouseEnter = (e: React.MouseEvent, title: string, text: string) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setHoveredData({
+            x: rect.left + rect.width / 2,
+            y: rect.top - 15,
+            text,
+            title
         });
     };
 
-    const showHomogeneityInsight = () => {
-        setActiveInsight({
-            title: "مؤشر التجانس داخل القسم",
-            definition: "مقياس يحدد مدى تقارب أو تباعد مستويات التلاميذ. كلما كان الرقم صغيراً، كان القسم متجانساً.",
-            pedagogicalRef: "يستند إلى 'بيداغوجيا الفوارق'. إذا كان التشتت كبيراً، فإن الدرس الموحد سيظلم فئة على حساب أخرى. التجانس يسهل المهمة، والتشتت يفرض التفويج.",
-            content: (
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/10">
-                        <span className="text-gray-300">قيمة المؤشر:</span>
-                        <span className="text-2xl font-bold text-purple-400 font-mono">{homogeneityIndex.toFixed(2)}</span>
-                    </div>
-                    <div className="text-sm text-gray-300 leading-relaxed space-y-2">
-                        {homogeneityIndex < 15 ? (
-                            <p><strong className="text-emerald-400">فئة متجانسة جداً:</strong> الفوارق بين التلاميذ بسيطة. هذا الوضع يسهل التدريس الجماعي الموحد.</p>
-                        ) : homogeneityIndex < 25 ? (
-                            <p><strong className="text-yellow-400">فئة عادية (متوسطة التجانس):</strong> توجد فوارق طبيعية بين التلاميذ، تسمح بالمنافسة والتعلم بالأقران.</p>
-                        ) : (
-                            <p><strong className="text-purple-400">فئة مشتتة (غير متجانسة):</strong> توجد هوة كبيرة بين النجباء والمتعثرين. التدريس الموحد سيفشل هنا، والحل هو التفويج (البيداغوجيا الفارقية).</p>
-                        )}
-                    </div>
-                </div>
-            )
-        });
+    const handleMouseLeave = () => {
+        setHoveredData(null);
     };
 
-    const showMatrixInsight = () => {
-        const total = performanceMatrix.total || 1;
-        const q_rote = Math.round((performanceMatrix.rote_reading / total) * 100); 
-        const q_decoding = Math.round((performanceMatrix.decoding_issue / total) * 100); 
+    const ExpandBtn = ({ section }: { section: AnalysisSection }) => (
+        <button 
+            onClick={(e) => { e.stopPropagation(); setExpandedSection(section); }}
+            className="absolute top-4 left-4 p-2 bg-slate-100 hover:bg-indigo-100 text-slate-500 hover:text-indigo-600 rounded-full transition-all duration-300 opacity-0 group-hover:opacity-100 transform scale-90 group-hover:scale-100 z-10 shadow-sm"
+            title="تكبير للتحليل المعمق"
+        >
+            <Maximize2 size={18} />
+        </button>
+    );
 
-        setActiveInsight({
-            title: "مصفوفة التوازن (شفوي/كتابي)",
-            definition: "أداة تشخيصية تقارن كفاءة 'الأداء القرائي' بكفاءة 'فهم المكتوب'. تكشف عن نوعية التعلم (هل هو حفظ آلي أم فهم عميق).",
-            pedagogicalRef: "مستمدة من نماذج القراءة (Simple View of Reading). القراءة ليست مجرد فك ترميز (Decoding) بل هي نتاج: فك ترميز × فهم لغوي. أي خلل في أحدهما يؤثر على النتيجة.",
-            content: (
-                <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-3 text-center">
-                        <div className="bg-white/5 p-2 rounded border border-white/10">
-                            <span className="block text-xl font-bold text-yellow-400">{q_rote}%</span>
-                            <span className="text-[10px] text-gray-400">قراءة آلية</span>
-                            <p className="text-[9px] text-gray-500 mt-1">يقرأ بطلاقة لكن الفهم ضعيف</p>
-                        </div>
-                        <div className="bg-white/5 p-2 rounded border border-white/10">
-                            <span className="block text-xl font-bold text-blue-400">{q_decoding}%</span>
-                            <span className="text-[10px] text-gray-400">تعثر في فك الرمز</span>
-                            <p className="text-[9px] text-gray-500 mt-1">يفهم المعنى لكن يتهجى ببطء</p>
-                        </div>
-                    </div>
-                    <div className="text-sm text-gray-300 leading-relaxed font-medium">
-                        {q_rote > 20 ? 
-                            <span className="text-yellow-200">تحذير: نسبة عالية من التلاميذ يعانون من 'القرائية الآلية'. هم يركزون على التهجئة والنطق الصحيح دون الوصول للمعنى. يجب التركيز على أنشطة الفهم الضمني والاستنتاج.</span> : 
-                            <span className="text-green-200">التوازن بين القراءة والفهم مقبول لدى الأغلبية.</span>
-                        }
-                    </div>
-                </div>
-            )
-        });
-    };
-
-    // Helper: Contextual Advice for Specific Criterion
     const getContextualAdvice = (label: string): string => {
-        if (label.includes('العادات القرائية')) return "التلميذ يعاني من مشاكل في الجلسة الصحيحة أو مسك الكتاب، أو يتلعثم بسبب الخجل. ركّز على القراءة النموذجية والتشجيع.";
-        if (label.includes('فك ترميز')) return "مشكلة في الوعي الصوتي والربط بين الحرف وصوته. يحتاج لتدريبات مكثفة على المقاطع الصوتية والدمج.";
-        if (label.includes('وحدات لغوية') || label.includes('الاسترسال')) return "يقرأ بتأتأة وتقطع. يحتاج لتدريبات الطلاقة (القراءة المتكررة للنص نفسه حتى الانطلاق).";
-        if (label.includes('المعاني الصريحة')) return "يقرأ جيداً لكن لا يركز في المعنى. اطرح عليه أسئلة بسيطة ومباشرة أثناء القراءة (من؟ أين؟).";
-        if (label.includes('تسلسل فكر')) return "يجد صعوبة في ترتيب الأحداث. استخدم قصصاً مصورة واطلب منه ترتيبها وسردها.";
-        if (label.includes('معاني الكلمات') || label.includes('رصيد')) return "الرصيد اللغوي ضعيف. شجعه على المطالعة واستخدام القاموس المصور.";
-        if (label.includes('الوعي الصوتي') || label.includes('الرسم الإملائي')) return "مشكلة في التمييز السمعي أو الذاكرة البصرية للكلمات. ركز على الإملاء المنظور.";
-        return "يحتاج التلميذ لتفريد التعلم في هذا المعيار، من خلال أنشطة مبسطة ومتدرجة.";
+        if (label.includes('العادات القرائية')) return "التلميذ يعاني من مشاكل في الجلسة الصحيحة أو مسك الكتاب. ركّز على القراءة النموذجية.";
+        if (label.includes('فك ترميز')) return "مشكلة في الوعي الصوتي والربط بين الحرف وصوته. يحتاج لتدريبات مكثفة على المقاطع.";
+        if (label.includes('وحدات لغوية')) return "يقرأ بتأتأة. يحتاج لتدريبات الطلاقة.";
+        if (label.includes('المعاني الصريحة')) return "يقرأ جيداً لكن لا يركز في المعنى. اطرح عليه أسئلة بسيطة.";
+        return "يحتاج التلميذ لتفريد التعلم في هذا المعيار.";
     };
 
-    // --- STUDENT DIAGNOSIS LOGIC ---
     const handleStudentDiagnosis = (student: any, criterion?: { id: number, label: string }) => {
         const oral = student.oralPct;
         const written = student.writtenPct;
         const gap = oral - written;
+        let profileType = '', diagnosis = '', remedy = '';
 
-        let profileType = '';
-        let diagnosis = '';
-        let remedy = '';
-
-        // 1. General Diagnosis (Profile)
         if (gap > 20) {
             profileType = "قراءة آلية (ببغائية)";
-            diagnosis = "التلميذ يتقن فك الرمز (التهجئة) ويقرأ بطلاقة ظاهرية، لكنه يعجز عن تحويل المقروء إلى معنى. هذا خلل في كفاءة الفهم وليس القراءة.";
-            remedy = "التركيز على أنشطة 'القراءة الصامتة' المتبوعة بأسئلة دقيقة. تدريبه على التلخيص الشفوي لما قرأه. ربط الكلمات بالصور والمعاني.";
+            diagnosis = "التلميذ يتقن فك الرمز لكنه يعجز عن تحويل المقروء إلى معنى.";
+            remedy = "التركيز على أنشطة 'القراءة الصامتة' المتبوعة بأسئلة دقيقة.";
         } else if (gap < -20) {
             profileType = "تعثر في فك الرمز";
-            diagnosis = "التلميذ يفهم السياق العام والتعليمات (ذكاء لغوي جيد)، لكنه يعاني من بطء أو صعوبة في التهجئة والأداء الجهري (ربما خجل أو بوادر عسر قراءة).";
-            remedy = "التدريب على الطلاقة من خلال 'القراءة النموذجية' المكثفة. تشجيعه على القراءة الجهرية في مجموعات صغيرة لكسر حاجز الخوف. معالجة مخارج الحروف.";
+            diagnosis = "التلميذ يفهم السياق العام لكنه يعاني من بطء في التهجئة.";
+            remedy = "التدريب على الطلاقة من خلال 'القراءة النموذجية'.";
         } else if (oral < 40 && written < 40) {
             profileType = "تعثر شامل";
-            diagnosis = "ضعف عام في كل من الآلية (التهجئة) والفهم. التلميذ لم يمتلك بعد مفاتيح القراءة الأساسية.";
-            remedy = "العودة إلى الوعي الصوتي (تمييز الأصوات). التركيز على المقاطع الصوتية البسيطة. تكييف النشاطات وتبسيطها.";
+            diagnosis = "ضعف عام في كل من الآلية والفهم.";
+            remedy = "العودة إلى الوعي الصوتي (تمييز الأصوات).";
         } else {
             profileType = "تعثر متوازن";
-            diagnosis = "مستوى التلميذ ضعيف نوعاً ما لكنه متوازن بين القراءة والفهم. يحتاج فقط لمزيد من التدريب.";
+            diagnosis = "مستوى التلميذ ضعيف نوعاً ما لكنه متوازن.";
             remedy = "المراجعة المستمرة وتكثيف التطبيقات.";
         }
 
-        // 2. Specific Context (If clicked from a list)
         let clickedCriterion = undefined;
         if (criterion) {
             clickedCriterion = {
@@ -352,179 +344,184 @@ const AcqYear2ArabicStats: React.FC<Props> = ({ records, scope, contextName }) =
 
         setSelectedStudentDiag({
             studentName: student.fullName,
-            profileType,
-            diagnosis,
-            remedy,
+            profileType, diagnosis, remedy,
             scores: { oral, written },
             gap,
-            clickedCriterion // Pass this to modal
+            clickedCriterion
         });
     };
 
+    // --- RENDER EXPANDED VIEW ---
+    const renderExpandedView = () => {
+        if (!expandedSection) return null;
+        const def = METRIC_DEFINITIONS[expandedSection];
+        const activeAnalysis = getAnalysis(expandedSection);
 
-    if (totalStudents === 0) {
+        let content = null;
+        switch (expandedSection) {
+            case 'distribution':
+                const a = gradeDistribution.A;
+                const b = gradeDistribution.B;
+                const cd = gradeDistribution.C + gradeDistribution.D;
+                const total = gradeDistribution.total;
+                content = (
+                    <div className="h-full flex flex-col items-center justify-center p-10 w-full">
+                         <div className="grid grid-cols-3 gap-4 w-full max-w-2xl mb-8">
+                            <div className="bg-emerald-500/20 p-4 rounded-2xl border border-emerald-500/50 text-center">
+                                <span className="block text-4xl font-bold text-emerald-400 mb-2">{Math.round((a/total)*100)}%</span>
+                                <span className="text-sm text-emerald-200">تحكم أقصى</span>
+                            </div>
+                            <div className="bg-blue-500/20 p-4 rounded-2xl border border-blue-500/50 text-center">
+                                <span className="block text-4xl font-bold text-blue-400 mb-2">{Math.round((b/total)*100)}%</span>
+                                <span className="text-sm text-blue-200">تحكم مقبول</span>
+                            </div>
+                            <div className="bg-red-500/20 p-4 rounded-2xl border border-red-500/50 text-center">
+                                <span className="block text-4xl font-bold text-red-400 mb-2">{Math.round((cd/total)*100)}%</span>
+                                <span className="text-sm text-red-200">تعثر (ج+د)</span>
+                            </div>
+                        </div>
+                    </div>
+                );
+                break;
+            case 'homogeneity':
+                 content = (
+                    <div className="h-full flex flex-col items-center justify-center p-10 w-full">
+                         <div className="relative w-80 h-40 bg-gray-700/50 rounded-t-full overflow-hidden mb-8 border-t-4 border-x-4 border-slate-600">
+                            <div className="absolute bottom-0 left-0 w-full h-full origin-bottom transition-transform duration-1000" style={{ transform: `rotate(${(Math.min(homogeneityIndex, 40) / 40) * 180 - 90}deg)` }}>
+                                <div className="w-2 h-full bg-white mx-auto shadow-[0_0_15px_white]"></div>
+                            </div>
+                        </div>
+                        <span className="text-6xl font-bold text-purple-400 font-mono">{homogeneityIndex.toFixed(2)}</span>
+                    </div>
+                );
+                break;
+            case 'matrix':
+                content = (
+                    <div className="h-full flex items-center justify-center w-full">
+                        <div className="aspect-square w-[400px] relative bg-slate-700/30 rounded-2xl border border-slate-600 p-4 grid grid-cols-2 grid-rows-2 gap-2">
+                            <div className="bg-blue-500/20 rounded flex flex-col items-center justify-center border border-blue-500/30">
+                                <span className="text-2xl font-bold text-blue-400">{Math.round((performanceMatrix.decoding_issue / performanceMatrix.total)*100)}%</span>
+                                <span className="text-sm text-blue-300">تعثر في فك الرمز</span>
+                            </div>
+                            <div className="bg-emerald-500/20 rounded flex flex-col items-center justify-center border border-emerald-500/30">
+                                <span className="text-2xl font-bold text-emerald-400">{Math.round((performanceMatrix.balanced_high / performanceMatrix.total)*100)}%</span>
+                                <span className="text-sm text-emerald-300">تحكم شامل</span>
+                            </div>
+                            <div className="bg-red-500/20 rounded flex flex-col items-center justify-center border border-red-500/30">
+                                <span className="text-2xl font-bold text-red-400">{Math.round((performanceMatrix.struggling / performanceMatrix.total)*100)}%</span>
+                                <span className="text-sm text-red-300">تعثر شامل</span>
+                            </div>
+                            <div className="bg-yellow-500/20 rounded flex flex-col items-center justify-center border border-yellow-500/30">
+                                <span className="text-2xl font-bold text-yellow-400">{Math.round((performanceMatrix.rote_reading / performanceMatrix.total)*100)}%</span>
+                                <span className="text-sm text-yellow-300">قراءة آلية</span>
+                            </div>
+                        </div>
+                    </div>
+                );
+                break;
+        }
+
         return (
-            <div className="flex flex-col items-center justify-center h-64 bg-white rounded-3xl shadow-sm border border-slate-200">
-                <AlertTriangle size={40} className="text-amber-400 mb-4" />
-                <h3 className="text-lg font-bold text-slate-600">لا توجد بيانات للعرض</h3>
-                <p className="text-slate-400 text-sm">تأكد من استيراد ملفات أولاً.</p>
+            <div className="fixed inset-0 z-[100] bg-slate-950 text-white flex animate-in zoom-in-95 duration-300 overflow-hidden">
+                <button onClick={() => setExpandedSection(null)} className="absolute top-6 left-6 p-2 bg-white/10 hover:bg-white/20 rounded-full z-50 text-white transition-all">
+                    <Minimize2 size={24} />
+                </button>
+
+                <div className="w-[400px] lg:w-[35%] bg-slate-900 border-l border-slate-800 p-8 flex flex-col shadow-2xl relative z-40 overflow-y-auto">
+                    <div className="mb-8 pb-6 border-b border-slate-800">
+                         {/* Static Definition Card */}
+                         <div className="bg-white/5 backdrop-blur-md rounded-lg p-3 border border-white/10 mb-4 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-1.5 bg-indigo-500/20 rounded-bl-lg border-b border-l border-white/10"><Info size={14} className="text-indigo-300"/></div>
+                            <div className="space-y-2 pt-1">
+                                 <div><h4 className="text-[11px] font-bold text-indigo-300 uppercase mb-0.5">المفهوم التربوي</h4><p className="text-xs text-white/90 leading-relaxed">{def.concept}</p></div>
+                                 <div className="pt-2 border-t border-white/10"><h4 className="text-[10px] font-bold text-slate-400 uppercase mb-0.5 flex items-center gap-1"><Ruler size={10}/> المرجعية الحسابية</h4><p className="text-[10px] text-slate-400 leading-relaxed font-mono opacity-80">{def.method}</p></div>
+                            </div>
+                        </div>
+                        <h2 className="text-2xl font-bold text-white font-serif">{def.title}</h2>
+                    </div>
+
+                    <div className="space-y-8 flex-1">
+                        <div className="relative pl-4 border-r-2 border-indigo-500/50 pr-4">
+                            <h4 className="text-indigo-400 font-bold uppercase text-xs mb-2 flex items-center gap-2"><Activity size={14}/> قراءة في البيانات</h4>
+                            <p className="text-slate-300 leading-relaxed text-sm text-justify">{activeAnalysis.reading}</p>
+                        </div>
+                        <div className="relative pl-4 border-r-2 border-amber-500/50 pr-4 bg-amber-500/5 p-4 rounded-l-xl">
+                            <h4 className="text-amber-400 font-bold uppercase text-xs mb-2 flex items-center gap-2"><Microscope size={14}/> التشخيص البيداغوجي</h4>
+                            <p className="text-slate-200 leading-relaxed text-sm font-medium text-justify">{activeAnalysis.diagnosis}</p>
+                        </div>
+                        <div className="relative pl-4 border-r-2 border-emerald-500/50 pr-4">
+                            <h4 className="text-emerald-400 font-bold uppercase text-xs mb-2 flex items-center gap-2"><CheckCircle2 size={14}/> التوصية والقرار</h4>
+                            <p className="text-slate-300 leading-relaxed text-sm text-justify">{activeAnalysis.recommendation}</p>
+                        </div>
+                    </div>
+                    
+                    <div className="mt-8 pt-6 border-t border-slate-800 text-center">
+                        <p className="text-xs text-slate-500">نظام المفتش التربوي الذكي © 2025</p>
+                    </div>
+                </div>
+
+                <div className="flex-1 bg-gradient-to-br from-slate-900 to-slate-950 flex items-center justify-center p-8 relative overflow-hidden">
+                    <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '40px 40px' }}></div>
+                    <div className="relative z-10 w-full h-full flex items-center justify-center">{content}</div>
+                </div>
             </div>
         );
-    }
+    };
 
-    const entityLabel = scope === 'district' ? 'المدارس' : 'الأفواج';
+    // --- MANUAL EDIT MODAL ---
+    const renderEditModal = () => {
+        if (!editingSection || !isEditMode) return null;
+        const currentData = getAnalysis(editingSection);
+        
+        return (
+            <EditAnalysisForm 
+                section={editingSection}
+                initialData={currentData}
+                onSave={(data) => handleSaveAnalysis(editingSection, data)}
+                onReset={() => handleResetAnalysis(editingSection)}
+                onClose={() => setEditingSection(null)}
+            />
+        );
+    };
+
+    if (totalStudents === 0) return <div className="text-center p-10 text-gray-400">لا توجد بيانات</div>;
 
     return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-12 relative">
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-24 relative">
             
-            {/* --- INSIGHT MODAL --- */}
-            {activeInsight && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-700" onClick={() => setActiveInsight(null)}>
-                    <div className="bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-700 animate-in zoom-in-95 duration-500" onClick={e => e.stopPropagation()}>
-                        <div className="bg-slate-950 p-5 border-b border-slate-800 flex justify-between items-start">
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2 mb-1">
-                                <Info size={20} className="text-blue-400"/>
-                                {activeInsight.title}
-                            </h3>
-                            <button onClick={() => setActiveInsight(null)} className="text-slate-400 hover:text-white transition-colors"><X size={20}/></button>
-                        </div>
-                        <div className="p-6">
-                            <div className="mb-6 pb-6 border-b border-slate-800">
-                                <p className="text-slate-300 text-sm leading-relaxed italic mb-4 border-l-2 border-slate-700 pl-3">
-                                    "{activeInsight.definition}"
-                                </p>
-                                <div className="mb-4 bg-blue-900/20 p-3 rounded border border-blue-900/50">
-                                    <h4 className="text-xs font-bold text-blue-400 flex items-center gap-2 mb-1"><BookOpen size={12}/> المرجعية البيداغوجية:</h4>
-                                    <p className="text-xs text-blue-200 leading-relaxed">{activeInsight.pedagogicalRef}</p>
-                                </div>
-                            </div>
-                            <div>
-                                <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                    <Activity size={12}/> قراءة في الأرقام
-                                </h4>
-                                {activeInsight.content}
-                            </div>
-                        </div>
-                    </div>
+            {/* TOOLTIP OVERLAY */}
+            {hoveredData && (
+                <div 
+                    className="fixed z-[9999] pointer-events-none bg-slate-900 text-white px-3 py-2 rounded-lg shadow-xl text-xs max-w-xs border border-slate-700"
+                    style={{ left: hoveredData.x, top: hoveredData.y, transform: 'translate(-50%, -100%)' }}
+                >
+                    {hoveredData.title && <div className="font-bold border-b border-slate-600 pb-1 mb-1 text-yellow-400">{hoveredData.title}</div>}
+                    <div>{hoveredData.text}</div>
+                    <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-slate-900 rotate-45 border-r border-b border-slate-700"></div>
                 </div>
             )}
 
-            {/* --- STUDENT DIAGNOSIS MODAL (UPDATED) --- */}
-            {selectedStudentDiag && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-500" onClick={() => setSelectedStudentDiag(null)}>
-                    <div className="bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-700 animate-in zoom-in-95 duration-300 max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-                        {/* Header */}
-                        <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-6 border-b border-slate-700 relative shrink-0">
-                            <button onClick={() => setSelectedStudentDiag(null)} className="absolute left-4 top-4 text-slate-400 hover:text-white"><X size={20}/></button>
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center text-red-400 border border-red-500/50">
-                                    <User size={24} />
-                                </div>
-                                <div>
-                                    <h3 className="text-xl font-bold text-white">{selectedStudentDiag.studentName}</h3>
-                                    <div className="flex items-center gap-2 mt-1">
-                                        <span className="text-xs font-bold bg-red-900/50 text-red-300 px-2 py-0.5 rounded border border-red-800">حالة تتطلب معالجة</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+            {/* MODALS */}
+            {renderExpandedView()}
+            {renderEditModal()}
 
-                        {/* Analysis Body - Scrollable */}
-                        <div className="p-6 space-y-6 overflow-y-auto">
-                            {/* Profile Type */}
-                            <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
-                                <h4 className="text-xs font-bold text-slate-400 mb-2 flex items-center gap-2 uppercase tracking-wider">
-                                    <Stethoscope size={14}/> التشخيص العام (البروفايل)
-                                </h4>
-                                <p className="text-lg font-bold text-white mb-1">{selectedStudentDiag.profileType}</p>
-                                <p className="text-sm text-slate-300 leading-relaxed">
-                                    {selectedStudentDiag.diagnosis}
-                                </p>
-                            </div>
-
-                            {/* Scores Visual */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-slate-800/30 p-3 rounded-lg text-center border border-slate-700">
-                                    <span className="text-[10px] text-slate-400 block mb-1">الأداء القرائي (شفوي)</span>
-                                    <span className={`text-xl font-bold ${selectedStudentDiag.scores.oral < 50 ? 'text-red-400' : 'text-emerald-400'}`}>
-                                        {selectedStudentDiag.scores.oral.toFixed(0)}%
-                                    </span>
-                                </div>
-                                <div className="bg-slate-800/30 p-3 rounded-lg text-center border border-slate-700">
-                                    <span className="text-[10px] text-slate-400 block mb-1">فهم المكتوب (كتابي)</span>
-                                    <span className={`text-xl font-bold ${selectedStudentDiag.scores.written < 50 ? 'text-red-400' : 'text-emerald-400'}`}>
-                                        {selectedStudentDiag.scores.written.toFixed(0)}%
-                                    </span>
-                                </div>
-                            </div>
-                            
-                            {/* Calculation Formula Note (ADDED) */}
-                            <div className="flex flex-col gap-1 items-center bg-white/5 p-2 rounded border border-white/10">
-                                <div className="flex items-center gap-2 text-slate-400 text-xs">
-                                    <Info size={12}/>
-                                    <span>كيفية حساب النسبة:</span>
-                                </div>
-                                <div className="text-[10px] text-slate-300 font-mono tracking-wide">
-                                    (أ=3 | ب=2 | ج=1 | د=0)
-                                </div>
-                                <span className="text-[9px] text-slate-500">* نسبة الكفاءة = (مجموع النقاط / المجموع الكلي الممكن) × 100</span>
-                            </div>
-
-                            {/* Specific Criterion Context (The New Part) */}
-                            {selectedStudentDiag.clickedCriterion ? (
-                                <div className="bg-orange-900/20 rounded-xl p-4 border border-orange-700/50 animate-in slide-in-from-bottom-2">
-                                    <h4 className="text-xs font-bold text-orange-400 mb-2 flex items-center gap-2 uppercase tracking-wider">
-                                        <Microscope size={14}/> تحليل سبب الإخفاق في هذا المعيار
-                                    </h4>
-                                    <div className="mb-2 text-xs font-bold text-orange-200 bg-orange-950/50 px-2 py-1 rounded inline-block">
-                                        {selectedStudentDiag.clickedCriterion.label}
-                                    </div>
-                                    <p className="text-sm text-orange-100 leading-relaxed font-medium">
-                                        {selectedStudentDiag.clickedCriterion.advice}
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="bg-emerald-900/20 rounded-xl p-4 border border-emerald-800/50">
-                                    <h4 className="text-xs font-bold text-emerald-400 mb-2 flex items-center gap-2 uppercase tracking-wider">
-                                        <BrainCircuit size={14}/> العلاج البيداغوجي المقترح
-                                    </h4>
-                                    <p className="text-sm text-emerald-100 leading-relaxed font-medium">
-                                        {selectedStudentDiag.remedy}
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* 1. HERO HEADER */}
-            <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden cursor-default">
+            {/* --- 1. HERO HEADER --- */}
+            <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
                 <div className="bg-slate-900 text-white p-8 relative">
                     <div className="absolute top-0 right-0 p-10 opacity-10"><Calculator size={150} /></div>
-                    <div className="relative z-10 flex flex-col md:flex-row justify-between items-end gap-6">
-                        <div>
-                            <div className="flex items-center gap-2 mb-2 text-indigo-300 font-bold uppercase tracking-widest text-xs">
-                                {scope === 'district' ? 'تحليل شامل للمقاطعة' : scope === 'school' ? 'تحليل المؤسسة' : 'تحليل الفوج التربوي'}
-                            </div>
-                            <h2 className="text-4xl font-bold font-serif mb-2">{YEAR2_ARABIC_DEF.label}</h2>
-                            <p className="text-slate-400 text-lg flex items-center gap-2"><School size={18}/> {contextName}</p>
+                    <div className="relative z-10">
+                        <div className="flex items-center gap-2 mb-2 text-indigo-300 font-bold uppercase tracking-widest text-xs">
+                            {scope === 'district' ? 'تحليل شامل للمقاطعة' : scope === 'school' ? 'تحليل المؤسسة' : 'تحليل الفوج'}
                         </div>
-                        
-                        <div className="flex gap-4">
-                            <div className="bg-slate-800 p-4 rounded-2xl text-center min-w-[100px] border border-slate-700 flex flex-col justify-center">
-                                <span className="block text-3xl font-bold text-white">{totalStudents}</span>
-                                <span className="text-xs text-slate-400 font-bold">تلميذ</span>
-                            </div>
-                        </div>
+                        <h2 className="text-4xl font-bold font-serif mb-2">{YEAR2_ARABIC_DEF.label}</h2>
+                        <p className="text-slate-400 text-lg flex items-center gap-2"><School size={18}/> {contextName}</p>
                     </div>
                 </div>
-                {/* KPI STATS */}
                 <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x md:divide-x-reverse divide-slate-100">
                     <div className="p-6 flex items-center gap-4">
                         <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center"><CheckCircle2 size={24}/></div>
                         <div>
-                            <p className="text-xs font-bold text-slate-400 uppercase">تحكم كلي / أقصى</p>
+                            <p className="text-xs font-bold text-slate-400 uppercase">تحكم كلي</p>
                             <p className="text-2xl font-bold text-emerald-700">{Math.round((globalKPIs.controlled / totalStudents)*100)}%</p>
                         </div>
                     </div>
@@ -545,29 +542,29 @@ const AcqYear2ArabicStats: React.FC<Props> = ({ records, scope, contextName }) =
                 </div>
             </div>
 
-            {/* 2. MAIN CHARTS */}
+            {/* --- 2. MAIN CHARTS --- */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 
                 {/* A. Distribution */}
                 <div 
-                    className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-lg hover:border-blue-300 transition-all group"
-                    onClick={showDistributionInsight}
-                    title="اضغط لعرض التحليل"
+                    className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-lg hover:border-blue-300 transition-all group relative"
+                    onClick={() => setExpandedSection('distribution')}
+                    onMouseEnter={(e) => handleMouseEnter(e, "توزيع التقديرات", "توزيع التلاميذ حسب مستويات التحكم الأربعة.")}
+                    onMouseLeave={handleMouseLeave}
                 >
+                    <ExpandBtn section="distribution" />
                     <div className="flex justify-between items-start mb-6">
-                        <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2"><Activity size={20} className="text-blue-500"/> توزيع التقديرات</h3>
+                        <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2"><Activity size={20} className="text-blue-500"/> التوزيع</h3>
                         <Info size={16} className="text-slate-300 group-hover:text-blue-500 transition-colors"/>
                     </div>
-                    <div className="flex items-end gap-4 h-40 px-4 mb-4 border-b border-slate-100 pb-1">
+                    <div className="flex items-end gap-4 h-40">
                         {['A', 'B', 'C', 'D'].map((grade) => {
                             const count = gradeDistribution[grade as keyof typeof gradeDistribution];
                             const pct = gradeDistribution.total > 0 ? (count / gradeDistribution.total) * 100 : 0;
                             const color = grade === 'A' ? 'bg-emerald-500' : grade === 'B' ? 'bg-blue-500' : grade === 'C' ? 'bg-orange-500' : 'bg-red-500';
                             return (
                                 <div key={grade} className="flex-1 flex flex-col justify-end items-center h-full">
-                                    <div className={`w-full rounded-t-lg ${color} opacity-90 relative group`} style={{ height: `${Math.max(pct, 5)}%` }}>
-                                        <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold bg-slate-800 text-white px-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">{Math.round(pct)}%</span>
-                                    </div>
+                                    <div className={`w-full rounded-t-lg ${color}`} style={{ height: `${Math.max(pct, 5)}%` }}></div>
                                     <span className="mt-2 font-bold text-slate-600 text-xs">{grade}</span>
                                 </div>
                             );
@@ -575,112 +572,79 @@ const AcqYear2ArabicStats: React.FC<Props> = ({ records, scope, contextName }) =
                     </div>
                 </div>
 
-                {/* B. Homogeneity Index */}
+                {/* B. Homogeneity */}
                 <div 
-                    className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-lg hover:border-purple-300 transition-all group"
-                    onClick={showHomogeneityInsight}
-                    title="اضغط لعرض التحليل"
+                    className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-lg hover:border-purple-300 transition-all group relative"
+                    onClick={() => setExpandedSection('homogeneity')}
+                    onMouseEnter={(e) => handleMouseEnter(e, "مؤشر التجانس", "مدى تقارب مستويات التلاميذ في القسم.")}
+                    onMouseLeave={handleMouseLeave}
                 >
+                    <ExpandBtn section="homogeneity" />
                     <div className="flex justify-between items-start mb-6">
-                        <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                            <Scale size={20} className="text-purple-500"/>
-                            مؤشر التجانس
-                        </h3>
+                        <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2"><Scale size={20} className="text-purple-500"/> التجانس</h3>
                         <Info size={16} className="text-slate-300 group-hover:text-purple-500 transition-colors"/>
                     </div>
-
                     <div className="flex justify-center items-center py-6">
                         <div className="relative w-48 h-24 bg-gray-100 rounded-t-full overflow-hidden">
                             <div className="absolute bottom-0 left-0 w-full h-full origin-bottom transition-transform duration-1000" style={{ transform: `rotate(${(Math.min(homogeneityIndex, 40) / 40) * 180 - 90}deg)` }}>
                                 <div className="w-1 h-full bg-slate-800 mx-auto"></div>
                             </div>
-                            <div className="absolute bottom-0 left-0 w-full h-4 bg-white z-10"></div>
                         </div>
                     </div>
-                    <div className="flex justify-between text-[10px] font-bold text-slate-400 px-4 -mt-4 mb-4">
-                        <span>0 (مثالي)</span>
-                        <span>40+ (مشتت)</span>
-                    </div>
-                    <div className="text-center">
-                        <p className="text-3xl font-bold text-purple-700">{homogeneityIndex.toFixed(1)}</p>
-                    </div>
+                    <div className="text-center text-3xl font-bold text-purple-700">{homogeneityIndex.toFixed(1)}</div>
                 </div>
 
-                {/* C. Matrix: Updated Terminology with Elegant Tooltips */}
+                {/* C. Matrix */}
                 <div 
-                    className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-lg hover:border-teal-300 transition-all group lg:col-span-3 xl:col-span-1 relative"
-                    onClick={showMatrixInsight}
+                    className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-lg hover:border-teal-300 transition-all group relative lg:col-span-3 xl:col-span-1"
+                    onClick={() => setExpandedSection('matrix')}
                 >
+                    <ExpandBtn section="matrix" />
                     <div className="flex justify-between items-start mb-4">
-                        <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                            <Puzzle size={20} className="text-teal-500"/>
-                            مصفوفة التوازن (شفوي/كتابي)
-                        </h3>
+                        <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2"><Puzzle size={20} className="text-teal-500"/> مصفوفة التوازن</h3>
                         <Info size={16} className="text-slate-300 group-hover:text-teal-500 transition-colors"/>
                     </div>
-                    
                     <div className="flex gap-6 items-center justify-center relative">
-                        {/* CUSTOM ELEGANT TOOLTIP */}
+                        {/* CUSTOM TOOLTIP FOR MATRIX */}
                         {hoveredMatrixZone && (
-                            <div className="absolute -top-16 left-1/2 -translate-x-1/2 z-20 bg-slate-800/90 backdrop-blur-sm text-white p-3 rounded-xl shadow-xl w-48 text-center animate-in zoom-in-95 duration-200 border border-slate-600 pointer-events-none">
-                                <div className="text-xs font-bold mb-1 border-b border-slate-600 pb-1">
-                                    {hoveredMatrixZone === 'q1' && "تعثر في فك الرمز"}
-                                    {hoveredMatrixZone === 'q2' && "تحكم شامل"}
-                                    {hoveredMatrixZone === 'q3' && "تعثر شامل"}
-                                    {hoveredMatrixZone === 'q4' && "قراءة آلية"}
-                                </div>
-                                <div className="text-[10px] text-slate-300 leading-tight">
-                                    {hoveredMatrixZone === 'q1' && "يفهم المعنى لكن يجد صعوبة في التهجئة"}
-                                    {hoveredMatrixZone === 'q2' && "توازن ممتاز بين الأداء والفهم"}
-                                    {hoveredMatrixZone === 'q3' && "صعوبات في مبادئ القراءة والفهم"}
-                                    {hoveredMatrixZone === 'q4' && "يقرأ بطلاقة (ببغائية) دون فهم المعنى"}
-                                </div>
-                                {/* Arrow */}
-                                <div className="absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-slate-800/90 rotate-45 border-r border-b border-slate-600"></div>
+                            <div className="absolute -top-16 left-1/2 -translate-x-1/2 z-20 bg-slate-800/90 text-white p-2 rounded text-xs w-40 text-center animate-in zoom-in-95 duration-200 pointer-events-none">
+                                {hoveredMatrixZone === 'q1' && "تعثر في فك الرمز (نطق ضعيف / فهم جيد)"}
+                                {hoveredMatrixZone === 'q2' && "تحكم شامل (متوازن)"}
+                                {hoveredMatrixZone === 'q3' && "تعثر شامل (صعوبات تعلم)"}
+                                {hoveredMatrixZone === 'q4' && "قراءة آلية (ببغائية)"}
+                                <div className="absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800/90 rotate-45"></div>
                             </div>
                         )}
 
                         <div className="aspect-square w-52 relative bg-slate-50 rounded-xl border border-slate-200 p-2 grid grid-cols-2 grid-rows-2 gap-1 shrink-0">
-                            {/* Top Left: Logic High, Calc Low */}
                             <div 
-                                className="bg-blue-100 rounded flex flex-col items-center justify-center relative hover:bg-blue-200 transition-colors"
+                                className="bg-blue-100 rounded flex flex-col items-center justify-center hover:bg-blue-200 transition-colors"
                                 onMouseEnter={() => setHoveredMatrixZone('q1')}
                                 onMouseLeave={() => setHoveredMatrixZone(null)}
                             >
                                 <span className="text-xs font-bold text-blue-800">{Math.round((performanceMatrix.decoding_issue / performanceMatrix.total)*100)}%</span>
-                                <span className="text-[9px] text-blue-600 font-bold mt-1">تعثر فك الرمز</span>
                             </div>
-                            {/* Top Right: Logic High, Calc High */}
                             <div 
-                                className="bg-emerald-100 rounded flex flex-col items-center justify-center relative hover:bg-emerald-200 transition-colors"
+                                className="bg-emerald-100 rounded flex flex-col items-center justify-center hover:bg-emerald-200 transition-colors"
                                 onMouseEnter={() => setHoveredMatrixZone('q2')}
                                 onMouseLeave={() => setHoveredMatrixZone(null)}
                             >
                                 <span className="text-xs font-bold text-emerald-800">{Math.round((performanceMatrix.balanced_high / performanceMatrix.total)*100)}%</span>
-                                <span className="text-[9px] text-emerald-600 font-bold mt-1">تحكم شامل</span>
                             </div>
-                            {/* Bottom Left: Logic Low, Calc Low */}
                             <div 
-                                className="bg-red-100 rounded flex flex-col items-center justify-center relative hover:bg-red-200 transition-colors"
+                                className="bg-red-100 rounded flex flex-col items-center justify-center hover:bg-red-200 transition-colors"
                                 onMouseEnter={() => setHoveredMatrixZone('q3')}
                                 onMouseLeave={() => setHoveredMatrixZone(null)}
                             >
                                 <span className="text-xs font-bold text-red-800">{Math.round((performanceMatrix.struggling / performanceMatrix.total)*100)}%</span>
-                                <span className="text-[9px] text-red-600 font-bold mt-1">تعثر شامل</span>
                             </div>
-                            {/* Bottom Right: Logic Low, Calc High */}
                             <div 
-                                className="bg-yellow-100 rounded flex flex-col items-center justify-center relative hover:bg-yellow-200 transition-colors"
+                                className="bg-yellow-100 rounded flex flex-col items-center justify-center hover:bg-yellow-200 transition-colors"
                                 onMouseEnter={() => setHoveredMatrixZone('q4')}
                                 onMouseLeave={() => setHoveredMatrixZone(null)}
                             >
                                 <span className="text-xs font-bold text-yellow-800">{Math.round((performanceMatrix.rote_reading / performanceMatrix.total)*100)}%</span>
-                                <span className="text-[9px] text-yellow-600 font-bold mt-1">قراءة آلية</span>
                             </div>
-                            
-                            {/* Axis Labels */}
-                            <div className="absolute -left-4 top-1/2 -translate-y-1/2 -rotate-90 text-[10px] text-slate-500 font-bold tracking-widest">كتابي</div>
-                            <div className="absolute bottom-[-20px] left-1/2 -translate-x-1/2 text-[10px] text-slate-500 font-bold tracking-widest">شفوي</div>
                         </div>
                     </div>
                 </div>
@@ -688,44 +652,29 @@ const AcqYear2ArabicStats: React.FC<Props> = ({ records, scope, contextName }) =
 
             {/* 3. CRITERIA HEATMAP */}
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                    <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2"><Target size={20} className="text-red-500"/> تحليل المعايير (الأضعف فالأقوى)</h3>
-                    
-                    {/* Legend (ADDED) */}
-                    <div className="flex gap-3 text-[10px] bg-slate-50 p-2 rounded-lg border border-slate-100">
-                        <div className="flex items-center gap-1"><div className="w-2 h-2 bg-emerald-500 rounded-full"></div><span>أ (تحكم أقصى)</span></div>
-                        <div className="flex items-center gap-1"><div className="w-2 h-2 bg-blue-400 rounded-full"></div><span>ب (تحكم مقبول)</span></div>
-                        <div className="flex items-center gap-1"><div className="w-2 h-2 bg-orange-400 rounded-full"></div><span>ج (تحكم جزئي)</span></div>
-                        <div className="flex items-center gap-1"><div className="w-2 h-2 bg-red-400 rounded-full"></div><span>د (تحكم محدود)</span></div>
-                    </div>
-                </div>
-
+                <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2 mb-6"><Target size={20} className="text-red-500"/> ترتيب المعايير</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {criterionAnalysis.map((crit, i) => (
                         <div key={i} className="bg-slate-50 rounded-xl p-4 border border-slate-100 relative overflow-hidden">
-                            <div className="flex justify-between items-start mb-2 relative z-10">
-                                <span className="bg-white text-slate-500 text-[10px] px-2 py-1 rounded border border-slate-200 font-bold">
+                            <div className="flex justify-between items-start mb-2">
+                                <span className="text-[10px] text-slate-400 font-bold bg-white px-2 py-0.5 rounded border border-slate-100">
                                     {crit.compId === 'reading_performance' ? 'أداء قرائي' : 'فهم مكتوب'}
                                 </span>
                                 <span className={`text-xs font-bold px-2 py-1 rounded ${crit.successRate < 50 ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>{Math.round(crit.successRate)}% نجاح</span>
                             </div>
-                            <h4 className="font-bold text-slate-800 text-sm mb-3 relative z-10">{crit.label}</h4>
-                            <div className="flex h-2 rounded-full overflow-hidden mb-2 relative z-10">
+                            <h4 className="font-bold text-slate-800 text-sm mb-3">{crit.label}</h4>
+                            <div className="flex h-2 rounded-full overflow-hidden">
                                 <div className="bg-emerald-500" style={{ width: `${(crit.stats.A / crit.stats.total)*100}%` }}></div>
                                 <div className="bg-blue-400" style={{ width: `${(crit.stats.B / crit.stats.total)*100}%` }}></div>
                                 <div className="bg-orange-400" style={{ width: `${(crit.stats.C / crit.stats.total)*100}%` }}></div>
                                 <div className="bg-red-400" style={{ width: `${(crit.stats.D / crit.stats.total)*100}%` }}></div>
-                            </div>
-                            <div className="flex justify-between text-[10px] text-slate-400 font-mono relative z-10 font-bold mt-2 pt-2 border-t border-slate-200">
-                                <span>{crit.stats.A + crit.stats.B} متحكم</span>
-                                <span>{crit.stats.C + crit.stats.D} متعثر</span>
                             </div>
                         </div>
                     ))}
                 </div>
             </div>
 
-            {/* 4. REMEDIAL LISTS (Class Scope) */}
+            {/* 4. REMEDIAL LISTS */}
             {scope === 'class' && (
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-red-100 border-t-4 border-t-red-500 mt-8">
                     <div className="flex justify-between items-center mb-6">
@@ -768,6 +717,150 @@ const AcqYear2ArabicStats: React.FC<Props> = ({ records, scope, contextName }) =
                     </div>
                 </div>
             )}
+
+            {/* EDIT BUTTON FOOTER */}
+            <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
+                 <button 
+                    onClick={() => setIsEditMode(true)}
+                    className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-8 py-4 rounded-2xl font-bold text-sm transition-all shadow-xl hover:shadow-2xl border-2 border-slate-700 hover:border-slate-600 hover:scale-105 group"
+                 >
+                    <Edit size={18} className="group-hover:rotate-12 transition-transform" />
+                    <span>تعديل التحليل</span>
+                 </button>
+            </div>
+
+            {/* MANUAL EDIT MODAL */}
+            {isEditMode && (
+                <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center mb-6 border-b pb-4">
+                            <div>
+                                <h3 className="font-bold text-xl text-slate-800 flex items-center gap-2">
+                                    <Edit size={24} className="text-indigo-600"/>
+                                    تعديل التحليل الآلي
+                                </h3>
+                                <p className="text-xs text-slate-500 mt-1">يمكن للسيد المفتش تغيير التحليل أو إثراؤه بما يراه مناسباً</p>
+                            </div>
+                            <button onClick={() => setIsEditMode(false)} className="text-slate-400 hover:text-red-500"><X/></button>
+                        </div>
+                        
+                        {!editingSection ? (
+                            <div className="grid grid-cols-2 gap-4">
+                                <button onClick={() => setEditingSection('distribution')} className="p-4 bg-slate-50 hover:bg-indigo-50 border rounded-xl text-right transition-colors group">
+                                    <span className="font-bold text-slate-700 block group-hover:text-indigo-700">توزيع التقديرات</span>
+                                </button>
+                                <button onClick={() => setEditingSection('homogeneity')} className="p-4 bg-slate-50 hover:bg-indigo-50 border rounded-xl text-right transition-colors group">
+                                    <span className="font-bold text-slate-700 block group-hover:text-indigo-700">مؤشر التجانس</span>
+                                </button>
+                                <button onClick={() => setEditingSection('matrix')} className="p-4 bg-slate-50 hover:bg-indigo-50 border rounded-xl text-right transition-colors group col-span-2">
+                                    <span className="font-bold text-slate-700 block group-hover:text-indigo-700">مصفوفة التوازن</span>
+                                </button>
+                            </div>
+                        ) : (
+                             <EditAnalysisForm 
+                                section={editingSection}
+                                initialData={getAnalysis(editingSection)}
+                                onSave={(data) => handleSaveAnalysis(editingSection, data)}
+                                onReset={() => handleResetAnalysis(editingSection)}
+                                onClose={() => setEditingSection(null)}
+                            />
+                        )}
+                    </div>
+                </div>
+            )}
+            
+            {/* FULL SCREEN MODALS */}
+            {renderExpandedView()}
+            
+             {/* STUDENT MODAL */}
+            {selectedStudentDiag && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in" onClick={() => setSelectedStudentDiag(null)}>
+                    <div className="bg-slate-900 w-full max-w-md rounded-3xl p-6 border border-slate-700 overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                        <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-6 border-b border-slate-700 relative shrink-0">
+                            <button onClick={() => setSelectedStudentDiag(null)} className="absolute left-4 top-4 text-slate-400 hover:text-white"><X size={20}/></button>
+                            <h3 className="text-xl font-bold text-white">{selectedStudentDiag.studentName}</h3>
+                        </div>
+                        <div className="p-6 space-y-6 overflow-y-auto">
+                             <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
+                                <p className="text-lg font-bold text-white mb-1">{selectedStudentDiag.profileType}</p>
+                                <p className="text-sm text-slate-300">{selectedStudentDiag.diagnosis}</p>
+                             </div>
+                             <div className="bg-emerald-900/20 rounded-xl p-4 border border-emerald-800/50">
+                                 <h4 className="text-xs font-bold text-emerald-400 mb-2 flex items-center gap-2"><BrainCircuit size={14}/> العلاج المقترح</h4>
+                                 <p className="text-sm text-emerald-100">{selectedStudentDiag.remedy}</p>
+                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Internal Component for Editing Analysis
+const EditAnalysisForm: React.FC<{
+    section: AnalysisSection;
+    initialData: AnalysisContent;
+    onSave: (data: AnalysisContent) => void;
+    onReset: () => void;
+    onClose: () => void;
+}> = ({ section, initialData, onSave, onReset, onClose }) => {
+    const [formData, setFormData] = useState(initialData);
+
+    const getTitle = () => {
+        return METRIC_DEFINITIONS[section].title;
+    };
+
+    return (
+        <div className="space-y-4 animate-in slide-in-from-right-4">
+             <div className="flex items-center justify-between">
+                 <button onClick={onClose} className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1">
+                     <ChevronRight size={12} className="rotate-180"/> عودة للقائمة
+                 </button>
+                 <span className="text-sm font-bold bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full">{getTitle()}</span>
+             </div>
+
+             <div>
+                 <label className="block text-xs font-bold text-slate-700 mb-1">قراءة في الأرقام</label>
+                 <VoiceTextarea 
+                    value={formData.reading} 
+                    onChange={(v) => setFormData({...formData, reading: v})} 
+                    className="w-full border rounded-lg p-3 text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 max-h-60 overflow-y-auto"
+                    minHeight="min-h-[120px]"
+                 />
+             </div>
+
+             <div>
+                 <label className="block text-xs font-bold text-slate-700 mb-1">الخلاصة والتشخيص</label>
+                 <VoiceTextarea 
+                    value={formData.diagnosis} 
+                    onChange={(v) => setFormData({...formData, diagnosis: v})} 
+                    className="w-full border rounded-lg p-3 text-sm bg-amber-50 focus:bg-white focus:ring-2 focus:ring-amber-500 max-h-60 overflow-y-auto"
+                    minHeight="min-h-[120px]"
+                 />
+             </div>
+
+             <div>
+                 <label className="block text-xs font-bold text-slate-700 mb-1">التوصيات والقرارات</label>
+                 <VoiceTextarea 
+                    value={formData.recommendation} 
+                    onChange={(v) => setFormData({...formData, recommendation: v})} 
+                    className="w-full border rounded-lg p-3 text-sm bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 max-h-60 overflow-y-auto"
+                    minHeight="min-h-[120px]"
+                 />
+             </div>
+
+             <div className="flex justify-between pt-4 border-t">
+                 <button onClick={onReset} className="text-red-500 text-xs font-bold flex items-center gap-1 hover:underline">
+                     <RotateCcw size={12}/> استرجاع النص الأصلي
+                 </button>
+                 <div className="flex gap-2">
+                     <button onClick={onClose} className="px-4 py-2 text-slate-500 font-bold hover:bg-slate-100 rounded-lg">إلغاء</button>
+                     <button onClick={() => onSave(formData)} className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-md flex items-center gap-2">
+                         <Save size={16}/> حفظ التعديلات
+                     </button>
+                 </div>
+             </div>
         </div>
     );
 };
