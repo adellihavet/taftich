@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useMemo } from 'react';
 import { Upload, Save, Check, ArrowLeftRight, School, Users, FileSpreadsheet, AlertTriangle, BarChart2, Layers, BookOpen, Filter, Trash2, PieChart, Database, Download, FileJson, RefreshCcw, Map, Info, AlertOctagon, X, Search } from 'lucide-react';
 import { AcqStudent, AcqClassRecord, AcqFilterState } from '../../types/acquisitions';
@@ -17,8 +18,8 @@ const LEVEL_SUBJECTS: Record<string, string[]> = {
     '2AP': ['اللغة العربية', 'الرياضيات'],
     '4AP': ['اللغة العربية', 'الرياضيات'], 
     '5AP': [
-        'اللغة العربية', 'الرياضيات', 'التربية الإسلامية', 'التربية المدنية',
-        'التربية العلمية', 'التاريخ', 'الجغرافيا', 'اللغة الفرنسية',
+        'اللغة العربية', 'الرياضيات', 'التربية الإسلامية', 'التاريخ', 'التربية المدنية',
+        'التربية العلمية', 'الجغرافيا', 'اللغة الفرنسية',
         'اللغة الأمازيغية', 'اللغة الإنجليزية', 'التربية البدنية', 'التربية الفنية'
     ]
 };
@@ -311,7 +312,6 @@ const AcqManager: React.FC<AcqManagerProps> = ({ availableSchools, onDataUpdated
             {/* --- NEW: TOP FILTER BAR (Replaces Sidebar) --- */}
             {mainView === 'stats' && (
                 <div className="bg-slate-50 border-b border-slate-200 px-6 py-3 flex flex-col lg:flex-row gap-4 items-start lg:items-center animate-in slide-in-from-top-2 relative z-10">
-                    {/* ... (Filter Bar Code for Dashboard) ... */}
                     <div className="flex bg-white rounded-lg border border-slate-200 shadow-sm p-1 shrink-0">
                         <button 
                             onClick={() => onUpdateFilters({ scope: 'district', selectedSchool: '', selectedClass: '', selectedSubject: '' })}
@@ -515,7 +515,10 @@ const AcqManager: React.FC<AcqManagerProps> = ({ availableSchools, onDataUpdated
                                                                     </div>
                                                                 </td>
                                                                 <td className="px-6 py-4">
-                                                                    <span className={`inline-block px-2 py-1 rounded text-xs font-bold border ${rec.subject.includes('العربية') ? 'bg-green-50 text-green-700 border-green-100' : 'bg-indigo-50 text-indigo-700 border-indigo-100'}`}>
+                                                                    <span className={`inline-block px-2 py-1 rounded text-xs font-bold border ${
+                                                                        rec.subject.includes('العربية') ? 'bg-green-50 text-green-700 border-green-100' : 
+                                                                        rec.subject.includes('إسلامية') ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                                                                        'bg-indigo-50 text-indigo-700 border-indigo-100'}`}>
                                                                         {rec.subject}
                                                                     </span>
                                                                 </td>

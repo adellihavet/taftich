@@ -185,7 +185,7 @@ export const parseAcqExcel = (data: ArrayBuffer, level: string, subject: string)
             // YEAR 5
             else if (level === '5AP') {
                 if (subject.includes('العربية')) {
-                    // Expecting 26 criteria (6+4+9+7)
+                    // Expecting 26 criteria
                     if (grades.length >= 26) { 
                         students.push({
                             id: Math.random().toString(36).substr(2, 9),
@@ -209,7 +209,7 @@ export const parseAcqExcel = (data: ArrayBuffer, level: string, subject: string)
                         });
                     }
                 } else if (subject.includes('الرياضيات')) {
-                    // Expecting 14 criteria (4+3+3+4)
+                    // Expecting 14 criteria
                     if (grades.length >= 14) {
                         students.push({
                             id: Math.random().toString(36).substr(2, 9),
@@ -219,6 +219,32 @@ export const parseAcqExcel = (data: ArrayBuffer, level: string, subject: string)
                                 'geometry_space': { 1: grades[4], 2: grades[5], 3: grades[6] },
                                 'measurements': { 1: grades[7], 2: grades[8], 3: grades[9] },
                                 'data_org': { 1: grades[10], 2: grades[11], 3: grades[12], 4: grades[13] }
+                            }
+                        });
+                    }
+                } else if (subject.includes('إسلامية')) {
+                    // Expecting 12 criteria (3+3+3+3)
+                    if (grades.length >= 12) {
+                        students.push({
+                            id: Math.random().toString(36).substr(2, 9),
+                            fullName: nameCandidate,
+                            results: {
+                                'behavior': { 1: grades[0], 2: grades[1], 3: grades[2] },
+                                'recitation': { 1: grades[3], 2: grades[4], 3: grades[5] },
+                                'understanding': { 1: grades[6], 2: grades[7], 3: grades[8] },
+                                'sira': { 1: grades[9], 2: grades[10], 3: grades[11] }
+                            }
+                        });
+                    }
+                } else if (subject.includes('تاريخ')) {
+                    // Expecting 7 criteria (3+4)
+                    if (grades.length >= 7) {
+                        students.push({
+                            id: Math.random().toString(36).substr(2, 9),
+                            fullName: nameCandidate,
+                            results: {
+                                'general_history': { 1: grades[0], 2: grades[1], 3: grades[2] },
+                                'national_history': { 1: grades[3], 2: grades[4], 3: grades[5], 4: grades[6] }
                             }
                         });
                     }

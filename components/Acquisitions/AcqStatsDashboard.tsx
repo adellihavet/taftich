@@ -1,5 +1,4 @@
 
-
 import React, { useMemo, useState } from 'react';
 import { AcqClassRecord, AcqFilterState } from '../../types/acquisitions';
 import { BarChart2, PieChart, FileText } from 'lucide-react';
@@ -9,6 +8,8 @@ import AcqYear4ArabicStats from './Analytics/AcqYear4ArabicStats';
 import AcqYear4MathStats from './Analytics/AcqYear4MathStats';
 import AcqYear5ArabicStats from './Analytics/AcqYear5ArabicStats';
 import AcqYear5MathStats from './Analytics/AcqYear5MathStats';
+import AcqYear5IslamicStats from './Analytics/AcqYear5IslamicStats';
+import AcqYear5HistoryStats from './Analytics/AcqYear5HistoryStats';
 import AcqTeacherProfile from './Analytics/AcqTeacherProfile';
 import AcqStructuredAnalysis from './Analytics/AcqStructuredAnalysis';
 
@@ -133,6 +134,20 @@ const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters 
                                 scope={scope}
                                 contextName={scope === 'district' ? 'المقاطعة' : scope === 'school' ? selectedSchool : `${selectedSchool} - ${selectedClass}`}
                             />
+                        ) : selectedLevel === '5AP' && selectedSubject.includes('إسلامية') ? (
+                            <AcqYear5IslamicStats
+                                records={filteredRecords}
+                                allRecords={records}
+                                scope={scope}
+                                contextName={scope === 'district' ? 'المقاطعة' : scope === 'school' ? selectedSchool : `${selectedSchool} - ${selectedClass}`}
+                            />
+                        ) : selectedLevel === '5AP' && selectedSubject.includes('تاريخ') ? (
+                            <AcqYear5HistoryStats
+                                records={filteredRecords}
+                                allRecords={records}
+                                scope={scope}
+                                contextName={scope === 'district' ? 'المقاطعة' : scope === 'school' ? selectedSchool : `${selectedSchool} - ${selectedClass}`}
+                            />
                         ) : (
                             <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden min-h-[400px] flex flex-col">
                                 <div className="bg-slate-900 text-white p-6 flex justify-between items-start">
@@ -161,6 +176,8 @@ const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters 
                                             <li>الرياضيات (السنة الرابعة)</li>
                                             <li>اللغة العربية (السنة الخامسة)</li>
                                             <li>الرياضيات (السنة الخامسة)</li>
+                                            <li>التربية الإسلامية (السنة الخامسة)</li>
+                                            <li>التاريخ (السنة الخامسة)</li>
                                         </ul>
                                     </p>
                                 </div>
