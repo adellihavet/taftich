@@ -1,7 +1,14 @@
-import React, { useMemo, useState } from 'react';
+
+import React, { useMemo, useState, useEffect } from 'react';
 import { AcqClassRecord } from '../../../types/acquisitions';
 import { YEAR4_MATH_DEF } from '../../../constants/acqYear4Math';
-import { BarChart3, Target, AlertTriangle, CheckCircle2, TrendingUp, LayoutGrid, Award, School, Scale, Activity, X, Info, HelpCircle, Calculator, BrainCircuit, Microscope, Puzzle, Stethoscope, PenTool, BookOpen, Ruler, Hash, Sigma, Zap } from 'lucide-react';
+import { 
+    BarChart3, Target, AlertTriangle, CheckCircle2, TrendingUp, LayoutGrid, Award, 
+    School, Scale, Activity, X, Info, HelpCircle, Calculator, BrainCircuit, Microscope, 
+    Puzzle, Stethoscope, PenTool, BookOpen, Ruler, Hash, Sigma, Zap, Maximize2, Minimize2, 
+    Edit, Save, RotateCcw, ChevronRight
+} from 'lucide-react';
+import VoiceTextarea from '../../VoiceTextarea';
 
 interface Props {
     records: AcqClassRecord[];
@@ -9,10 +16,51 @@ interface Props {
     contextName: string;
 }
 
+// Types for Analysis Structure
+type AnalysisSection = 'distribution' | 'homogeneity' | 'matrix';
+interface AnalysisContent {
+    reading: string;
+    diagnosis: string;
+    recommendation: string;
+}
+
+// Static Definitions for Focus Mode (Specific to Year 4 Math)
+const METRIC_DEFINITIONS: Record<AnalysisSection, { title: string, concept: string, method: string }> = {
+    distribution: {
+        title: "توزيع التحكم (تأشيرة العبور)",
+        concept: "مؤشر استشرافي يقيس مدى جاهزية القسم لمناهج السنة الخامسة (الانتقال من التفكير المحسوس إلى المجرد).",
+        method: "حساب نسب التلاميذ في كل مستوى (أ، ب، ج، د). نسبة (أ+ب) تمثل الأمان، ونسبة (ج+د) تمثل الهشاشة."
+    },
+    homogeneity: {
+        title: "مؤشر التجانس",
+        concept: "مقياس يحدد مدى تقارب أو تباعد مستويات التلاميذ في استيعاب المفاهيم الرياضية التراكمية.",
+        method: "حساب الانحراف المعياري (Standard Deviation). (أقل من 15: متجانس / أكثر من 25: مشتت يتطلب التفويج)."
+    },
+    matrix: {
+        title: "مصفوفة (موارد / منهجية)",
+        concept: "أداة تشخيصية تقارن بين 'امتلاك الموارد' (الحساب، القواعد) و 'كفاءة حل المشكلات' (المنهجية، الترييض).",
+        method: "تصنيف التلاميذ في 4 خانات بناءً على تقاطع معدل 'التحكم في الموارد' ومعدل 'المنهجية'."
+    }
+};
+
 const AcqYear4MathStats: React.FC<Props> = ({ records, scope, contextName }) => {
     
-    const [activeInsight, setActiveInsight] = useState<{ title: string; definition: string; pedagogicalRef: string; content: React.ReactNode } | null>(null);
+    // State for Expanded View (Focus Mode)
+    const [expandedSection, setExpandedSection] = useState<string | null>(null);
+    
+    // State for Tooltips
+    const [hoveredData, setHoveredData] = useState<{ x: number, y: number, text: string, title?: string } | null>(null);
     const [hoveredMatrixZone, setHoveredMatrixZone] = useState<string | null>(null);
+
+    // State for Manual Override
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [editingSection, setEditingSection] = useState<AnalysisSection | null>(null);
+    const [customAnalysis, setCustomAnalysis] = useState<Record<string, AnalysisContent>>({});
+
+    // State for General Insight Modal
+    const [activeInsight, setActiveInsight] = useState<{ title: string; definition: string; pedagogicalRef: string; content: React.ReactNode } | null>(null);
+
+    // State for Individual Student Diagnosis
     const [selectedStudentDiag, setSelectedStudentDiag] = useState<{ 
         studentName: string; 
         profileType: string; 
@@ -21,6 +69,33 @@ const AcqYear4MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
         scores: { resources: number, solving: number };
         clickedCriterion?: { label: string, advice: string };
     } | null>(null);
+
+    // Load custom analysis
+    useEffect(() => {
+        const key = `mufattish_analysis_y4_math_${contextName}_${scope}`;
+        const saved = localStorage.getItem(key);
+        if (saved) {
+            try {
+                setCustomAnalysis(JSON.parse(saved));
+            } catch (e) {
+                console.error("Failed to load custom analysis", e);
+            }
+        }
+    }, [contextName, scope]);
+
+    const handleSaveAnalysis = (section: string, data: AnalysisContent) => {
+        const newAnalysis = { ...customAnalysis, [section]: data };
+        setCustomAnalysis(newAnalysis);
+        localStorage.setItem(`mufattish_analysis_y4_math_${contextName}_${scope}`, JSON.stringify(newAnalysis));
+        setEditingSection(null);
+    };
+
+    const handleResetAnalysis = (section: string) => {
+        const newAnalysis = { ...customAnalysis };
+        delete newAnalysis[section];
+        setCustomAnalysis(newAnalysis);
+        localStorage.setItem(`mufattish_analysis_y4_math_${contextName}_${scope}`, JSON.stringify(newAnalysis));
+    };
 
     // --- 1. DATA PREPARATION ---
     const allStudents = useMemo(() => {
@@ -40,7 +115,7 @@ const AcqYear4MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
         return comp[critId] || comp[String(critId)];
     };
 
-    // Calculate Scores (Deterministic Logic)
+    // Calculate Scores
     const studentAnalysis = useMemo(() => {
         return allStudents.map(s => {
             let totalPoints = 0, maxPoints = 0;
@@ -144,68 +219,113 @@ const AcqYear4MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
         ).sort((a, b) => a.successRate - b.successRate);
     }, [allStudents]);
 
-    // --- EXACT MATHEMATICAL ADVICE ENGINE ---
-    const getMathAdvice = (label: string): string => {
-        // Criterion 1: Numbers (Fractions/Decimals)
-        if (label.includes('الأعداد') || label.includes('الكسور')) {
-            return "يواجه التلميذ 'عائقاً إبستيمولوجياً' في الانتقال من الأعداد الطبيعية (المنفصلة) إلى الأعداد الناطقة (المتصلة). هو يتعامل مع (2.5) كعددين (2 و 5). العلاج: تفكيك العدد العشري إلى (جزء صحيح + كسور عشرية) واستخدام المستقيم المدرج لإدراك أن الكسر هو عدد محصور.";
+    // --- ANALYSIS GENERATION ---
+
+    const getDefaultAnalysis = (section: string): AnalysisContent => {
+        if (section === 'distribution') {
+            const a = gradeDistribution.A;
+            const b = gradeDistribution.B;
+            const cd = gradeDistribution.C + gradeDistribution.D;
+            const total = gradeDistribution.total || 1;
+            
+            let diagnosis = a + b > cd 
+                ? "مؤشر إيجابي: الأغلبية تتحكم في الكفاءات الختامية (الأعداد الكبيرة، الهندسة). جاهزية جيدة للسنة الخامسة."
+                : "مؤشر مقلق: ارتفاع نسبة الهشاشة (ج+د) ينذر بصعوبات في استيعاب مفاهيم السنة الخامسة (الكسور، التناسبية).";
+
+            return {
+                reading: `تحكم أقصى: ${Math.round((a/total)*100)}% | تحكم مقبول: ${Math.round((b/total)*100)}% | تعثر: ${Math.round((cd/total)*100)}%`,
+                diagnosis: diagnosis,
+                recommendation: a + b > cd ? "تعزيز المكتسبات بوضعيات مركبة." : "تفعيل مشروع القسم لعلاج الأساسيات المفقودة."
+            };
         }
-        // Criterion 2: Geometry
-        if (label.includes('الهندسة') || label.includes('الفضاء')) {
-            return "التلميذ ما زال في مرحلة 'الهندسة الحسية' (يعتمد على العين المجردة) ولم ينتقل إلى 'هندسة الخواص والأدوات'. يخلط بين (المعين) و(المربع) لغياب الزوايا القائمة في ذهنه. العلاج: الإنشاء الهندسي الصارم بالأدوات ووصف الأشكال بخصائصها (أضلاع، زوايا) لا بشكلها.";
+
+        if (section === 'homogeneity') {
+            let diagnosis = "";
+            if (homogeneityIndex < 18) diagnosis = "القسم متجانس جداً. الفوارق بسيطة مما يسهل التدريس الجماعي.";
+            else if (homogeneityIndex < 28) diagnosis = "تجانس متوسط. توجد فوارق طبيعية يمكن تسييرها بيداغوجياً.";
+            else diagnosis = "تشتت حاد. القسم منشطر إلى فئة متمكنة وفئة متعثرة جداً.";
+
+            return {
+                reading: `قيمة المؤشر: ${homogeneityIndex.toFixed(2)}`,
+                diagnosis: diagnosis,
+                recommendation: homogeneityIndex > 28 ? "اعتماد التفويج المرن (فوج علاج / فوج إثراء)." : "الاستمرار في التنويع البيداغوجي."
+            };
         }
-        // Criterion 3: Proportionality/Data
-        if (label.includes('التناسبية') || label.includes('تنظيم')) {
-            return "يسيطر عليه 'النموذج الجمعي' (كلما زاد، نزيد) ويفشل في إدراك 'العلاقة الضربية' (المرور للوحدة). العلاج: جداول تناسبية بسيطة من الواقع (وصفات طبخ، أثمان) والبحث عن معامل التناسبية (العدد السحري).";
+
+        if (section === 'matrix') {
+            const total = performanceMatrix.total || 1;
+            const q_method = Math.round((performanceMatrix.method_gap / total) * 100);
+            const q_know = Math.round((performanceMatrix.knowledge_gap / total) * 100);
+            
+            return {
+                reading: `موارد > منهجية (حفظ): ${q_method}% | منهجية > موارد (تسرع): ${q_know}%`,
+                diagnosis: q_method > 20 ? "طغيان الحفظ الآلي للقواعد دون فهم كيفية توظيفها في حل المشكلات." : "توازن نسبي بين المعرفة والتوظيف.",
+                recommendation: q_method > 20 ? "التركيز على 'ترييض المشكلات' وفهم المعنى." : "تكثيف الحساب لتمتين الآلية."
+            };
         }
-        // Solving Criteria
-        if (label.includes('فهم المشكلة')) {
-            return "مشكلة في 'الترجمة'. التلميذ يقرأ النص كقصة أدبية ولا يستخرج العلاقات الرياضية (الكلمات المفتاحية: وزع = قسمة، بقي = طرح). العلاج: تلوين المعطيات والمطلوب بألوان مختلفة، وتمثيل الوضعية بمخطط قبل الحل.";
-        }
-        if (label.includes('انسجام') || label.includes('الخوارزمية')) {
-            return "غياب 'المعنى الرياضي للعمليات'. التلميذ يختار العملية عشوائياً (غالباً الجمع لأنه الأسهل). العلاج: ربط كل عملية بمدلولها (الجمع للضم، الطرح للفرق، الضرب للتكرار، القسمة للتوزيع والمقايسة).";
-        }
-        if (label.includes('الاستعمال السليم') || label.includes('الحساب')) {
-            return "الخلل تقني (إجرائي). يختار العملية الصحيحة لكن يخطئ في التنفيذ (نسيان الاحتفاظ، خطأ في جدول الضرب). العلاج: التدريب الميكانيكي على الآلية والحساب الذهني اليومي.";
-        }
-        if (label.includes('التبليغ')) {
-            return "التلميذ يصل للنتيجة لكنه يفشل في 'التواصل الرياضي' (ينسى الوحدة، لا يكتب الجملة، لا ينظم الورقة). العلاج: إلزامه بمنهجية الحل الثلاثية الصارمة (الحل/العمليات/الجواب) ومحاسبته على التنظيم.";
-        }
-        return "يتطلب هذا المعيار تدخلاً مباشراً لتصحيح التصورات الخاطئة.";
+        return { reading: '', diagnosis: '', recommendation: '' };
     };
 
-    // --- EXACT DIAGNOSIS PROFILER ---
+    const getAnalysis = (section: string) => {
+        return customAnalysis[section] || getDefaultAnalysis(section);
+    };
+
+    // --- HELPERS ---
+    
+    const handleMouseEnter = (e: React.MouseEvent, title: string, text: string) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setHoveredData({
+            x: rect.left + rect.width / 2,
+            y: rect.top - 15,
+            text,
+            title
+        });
+    };
+
+    const handleMouseLeave = () => {
+        setHoveredData(null);
+    };
+
+    const ExpandBtn = ({ section }: { section: AnalysisSection }) => (
+        <button 
+            onClick={(e) => { e.stopPropagation(); setExpandedSection(section); }}
+            className="absolute top-4 left-4 p-2 bg-slate-100 hover:bg-indigo-100 text-slate-500 hover:text-indigo-600 rounded-full transition-all duration-300 opacity-0 group-hover:opacity-100 transform scale-90 group-hover:scale-100 z-10 shadow-sm"
+            title="تكبير للتحليل المعمق"
+        >
+            <Maximize2 size={18} />
+        </button>
+    );
+
+    const getMathAdvice = (label: string): string => {
+        if (label.includes('الأعداد') || label.includes('الكسور')) return "صعوبة في الانتقال من الأعداد الطبيعية إلى الكسور/العشرية. العلاج: استخدام المستقيم المدرج وتفكيك العدد.";
+        if (label.includes('الهندسة')) return "مشكلة في الانتقال من الهندسة الحسية (بالعين) إلى هندسة الخواص والأدوات. العلاج: الإنشاء الهندسي الدقيق.";
+        if (label.includes('التناسبية')) return "عدم إدراك العلاقة الخطية (المرور للوحدة). العلاج: جداول تناسبية من الواقع (وصفات، أثمان).";
+        if (label.includes('فهم المشكلة')) return "صعوبة في ترجمة النص اللغوي إلى علاقات رياضية. العلاج: تلوين المعطيات والمطلوب وتمثيل الوضعية.";
+        if (label.includes('الخوارزمية')) return "اختيار عشوائي للعملية لغياب المعنى (الجمع للضم، الطرح للفرق...). العلاج: ربط العمليات بمدلولها.";
+        return "يحتاج التلميذ لتفريد التعلم في هذا المعيار.";
+    };
+
     const handleStudentDiagnosis = (student: any, criterion?: { id: number, label: string }) => {
         const res = student.resPct;
         const solv = student.solvPct;
-        
-        let profileType = '';
-        let diagnosis = '';
-        let remedy = '';
+        let profileType = '', diagnosis = '', remedy = '';
 
-        // 1. Conceptual Gap (Resources < 40)
-        if (res < 40) {
-            profileType = "فجوة مفاهيمية (عدم بناء المفهوم)";
-            diagnosis = "التلميذ يواجه صعوبة في 'بنية الرياضيات' ذاتها. المفاهيم الأساسية (الكسر، العشرية، التوازي) غير مبنية في ذهنه، لذلك يعجز عن استخدامها. الخلل ليس في الانتباه، بل في مرحلة التجريد.";
-            remedy = "العودة الضرورية إلى 'المحسوس'. لا يمكن حل مشكلات حول الكسور وهو لا يدرك معنى (نصف) بالطي والقص. يجب إعادة بناء المفهوم من الصفر.";
-        } 
-        // 2. Procedural Gap (Resources High, Solving Low)
-        else if (res >= 60 && solv < 40) {
-            profileType = "غياب الترييض (عائق النقل)";
-            diagnosis = "التلميذ يمتلك الأدوات (يحسب جيداً، يعرف القواعد) لكنه يفشل في 'استدعائها' عند الحاجة. هذه حالة كلاسيكية لـ 'انفصال المعرفة عن سياقها'. هو يعرف جدول الضرب، لكن لا يعرف متى يضرب في وضعية مشكلة.";
-            remedy = "التدريب المكثف على 'ترييض المشكلات'. إعطاؤه وضعيات تتطلب اختيار الأداة فقط دون إجراء الحساب. سؤاله دائماً: 'لماذا اخترت هذه العملية؟'.";
-        }
-        // 3. Technical Gap (Solving High, Resources Low - Rare)
-        else if (res < 50 && solv >= 60) {
+        if (res >= 60 && solv < 40) {
+            profileType = "غياب الترييض (حفظ)";
+            diagnosis = "يتقن الحساب والقواعد لكن يعجز عن حل المشكلات (انفصال المعرفة عن السياق).";
+            remedy = "التدريب على 'ترييض المشكلات' واختيار الأدوات دون حساب.";
+        } else if (res < 40 && solv >= 60) {
             profileType = "ذكاء منطقي وهشاشة حسابية";
-            diagnosis = "التلميذ يمتلك استدلالاً سليماً ويختار العمليات الصحيحة (يفهم المشكلة جيداً)، لكنه يضيع النقاط بسبب أخطاء حسابية تافهة أو نسيان للقواعد الهندسية. مشكلته في 'الدقة' وليس 'الفهم'.";
-            remedy = "الصرامة في الحساب والتدرب على المراقبة الذاتية للنتائج (هل النتيجة معقولة؟). تكثيف الحساب الذهني السريع لتمتين الآلية.";
-        }
-        // 4. Balanced
-        else {
-            profileType = "تحكم متوازن ومستقر";
-            diagnosis = "توازن إيجابي بين امتلاك الموارد المعرفية والقدرة على تجنيدها في وضعيات مركبة. هذا التلميذ جاهز للانتقال لمفاهيم السنة الخامسة.";
-            remedy = "تعزيز القدرات بوضعيات إدماجية مركبة تتطلب تجنيد عدة موارد في آن واحد لتنمية الفكر التركيبي.";
+            diagnosis = "يفهم المشكلة ويختار الحل الصحيح لكن يخطئ في الحساب (نقص الدقة).";
+            remedy = "الصرامة في الحساب والتدرب على المراقبة الذاتية.";
+        } else if (res < 35 && solv < 35) {
+            profileType = "فجوة مفاهيمية";
+            diagnosis = "صعوبات جذرية في المفاهيم الأساسية (الكسر، العشرية).";
+            remedy = "العودة للمحسوس وإعادة بناء المفاهيم.";
+        } else {
+            profileType = "تحكم متوازن";
+            diagnosis = "توازن إيجابي بين الموارد والمنهجية.";
+            remedy = "تعزيز القدرات بوضعيات مركبة.";
         }
 
         let clickedCriterion = undefined;
@@ -224,32 +344,25 @@ const AcqYear4MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
         });
     };
 
-    // --- INSIGHTS (DEEP PEDAGOGICAL CONTENT) ---
-    
+    // --- INSIGHTS ---
     const showMatrixInsight = () => {
         const total = performanceMatrix.total || 1;
         setActiveInsight({
             title: "تحليل المصفوفة: (امتلاك الموارد / كفاءة الحل)",
             definition: "تحليل العلاقة الجدلية بين 'المعرفة' و 'القدرة على التوظيف'.",
-            pedagogicalRef: "الرياضيات ليست مجرد تخزين للمعلومات (ذاكرة)، بل هي ورشة عمل ذهنية. الفجوة بين الامتلاك والتطبيق تسمى 'عائق النقل الديداكتيكي'. التلميذ الذي يحفظ جدول الضرب (مورد) لكنه يجمع الأعداد في وضعية التكرار (منهجية)، يعاني من قطيعة في التعلم.",
+            pedagogicalRef: "الرياضيات ليست مجرد تخزين للمعلومات (ذاكرة)، بل هي ورشة عمل ذهنية. الفجوة بين الامتلاك والتطبيق تسمى 'عائق النقل الديداكتيكي'.",
             content: (
                 <div className="space-y-4">
-                    <div className="bg-white/5 p-3 rounded border border-white/10 text-sm mb-4">
-                        <ul className="space-y-2 text-gray-300">
-                            <li className="flex gap-2 items-start"><div className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-2 shrink-0"></div><span><strong>التحكم في الموارد (المعارف):</strong> القدرة على العد، الحساب، معرفة خواص الأشكال، وحفظ القوانين.</span></li>
-                            <li className="flex gap-2 items-start"><div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 shrink-0"></div><span><strong>المنهجية (التوظيف):</strong> فهم السند، ترجمة النص إلى مخطط، اختيار الأداة المناسبة، والتبرير.</span></li>
-                        </ul>
-                    </div>
                     <div className="grid grid-cols-2 gap-3 text-center">
                         <div className="bg-yellow-500/20 p-3 rounded-lg border border-yellow-500/50">
                             <span className="block text-2xl font-bold text-yellow-400">{Math.round((performanceMatrix.method_gap/total)*100)}%</span>
                             <span className="text-xs text-yellow-200 font-bold block mb-1">موارد {'>'} منهجية</span>
-                            <p className="text-[10px] text-gray-400 leading-tight">"حفظ آلي": يملك الأداة ولا يعرف وظيفتها.</p>
+                            <p className="text-[10px] text-gray-400">"حفظ آلي"</p>
                         </div>
                         <div className="bg-blue-500/20 p-3 rounded-lg border border-blue-500/50">
                             <span className="block text-2xl font-bold text-blue-400">{Math.round((performanceMatrix.knowledge_gap/total)*100)}%</span>
                             <span className="text-xs text-blue-200 font-bold block mb-1">منهجية {'>'} موارد</span>
-                            <p className="text-[10px] text-gray-400 leading-tight">"منطق سليم": يعرف الوظيفة وتخونه الأداة.</p>
+                            <p className="text-[10px] text-gray-400">"منطق سليم"</p>
                         </div>
                     </div>
                 </div>
@@ -259,18 +372,13 @@ const AcqYear4MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
 
     const showHomogeneityInsight = () => {
         setActiveInsight({
-            title: "مؤشر التجانس (إنذار بيداغوجي)",
+            title: "مؤشر التجانس",
             definition: "درجة التقارب في استيعاب المفاهيم الرياضية التراكمية.",
-            pedagogicalRef: "الرياضيات مادة ذات 'بناء هرمي' صارم (الضرب يعتمد على الجمع، القسمة تعتمد على الضرب). ارتفاع مؤشر التشتت يعني أن القسم منشطر زمنياً: فئة في 'الحاضر' (الدرس الحالي) وفئة مازالت في 'الماضي' (تعثرات سابقة). الحل ليس في إعادة الدرس، بل في 'التفويج المرن' لمعالجة الأساسيات المفقودة.",
+            pedagogicalRef: "ارتفاع مؤشر التشتت يعني أن القسم منشطر زمنياً. الحل ليس في إعادة الدرس، بل في 'التفويج المرن'.",
             content: (
                 <div className="text-center space-y-4">
                     <div className="inline-block px-6 py-2 bg-purple-500/20 rounded-xl border border-purple-500/50">
                         <span className="text-4xl font-bold text-purple-400 font-mono">{homogeneityIndex.toFixed(2)}</span>
-                    </div>
-                    <div className="text-sm text-gray-300 bg-white/5 p-4 rounded border border-white/10 text-justify">
-                        {homogeneityIndex > 25 
-                            ? <span className="text-red-300"><strong>تشتت حاد (خطر):</strong> القسم يسير بسرعتين مختلفتين. التدريس الموحد سيعمق الفجوة ويزيد من 'التسرب المعرفي'. يجب اعتماد استراتيجية التعليم المتمايز فوراً.</span> 
-                            : <span className="text-emerald-300"><strong>تجانس مقبول:</strong> الفوارق طبيعية ويمكن تسييرها داخل القسم عبر تنويع صعوبة الأنشطة (تفريد التعلم).</span>}
                     </div>
                 </div>
             )
@@ -283,9 +391,9 @@ const AcqYear4MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
         const cd = gradeDistribution.C + gradeDistribution.D;
         
         setActiveInsight({
-            title: "توزيع التحكم (تأشيرة العبور)",
-            definition: "نظرة استشرافية لمدى جاهزية القسم لمناهج السنة الخامسة.",
-            pedagogicalRef: "في السنة الرابعة، الرياضيات تنتقل من 'التفكير المحسوس' إلى بداية 'التفكير المجرد'. نسبة التحكم (أ+ب) هي مؤشر الأمان. تراكم التعثرات (ج+د) في هذا المستوى يعني أن التلميذ سيدخل السنة الخامسة وهو يفتقد لأدوات العمل الأساسية (الكسور، الآلية، الهندسة)، مما يجعله عرضة للفشل المدرسي.",
+            title: "توزيع التحكم",
+            definition: "نظرة استشرافية لمدى جاهزية القسم.",
+            pedagogicalRef: "تراكم التعثرات (ج+د) في هذا المستوى يعني أن التلميذ سيدخل السنة الخامسة وهو يفتقد لأدوات العمل الأساسية.",
             content: (
                 <div className="space-y-4">
                     <div className="flex items-center justify-between bg-emerald-900/30 p-3 rounded border border-emerald-700/50">
@@ -293,15 +401,151 @@ const AcqYear4MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
                         <span className="text-2xl font-bold text-white">{Math.round((ab/total)*100)}%</span>
                     </div>
                     <div className="flex items-center justify-between bg-red-900/30 p-3 rounded border border-red-700/50">
-                        <span className="text-red-200 text-sm font-bold">هشاشة/تعثر (ج+د)</span>
+                        <span className="text-red-200 text-sm font-bold">هشاشة (ج+د)</span>
                         <span className="text-2xl font-bold text-white">{Math.round((cd/total)*100)}%</span>
-                    </div>
-                    <div className="bg-blue-900/20 p-3 rounded border border-blue-900/50 text-xs text-blue-200 text-justify leading-relaxed mt-2">
-                        <strong>توصية:</strong> إذا تجاوزت نسبة الهشاشة 30%، فيجب تفعيل 'مشروع القسم' للتركيز على الكفاءات المستعرضة (الحساب الذهني، حل المشكلات) بشكل يومي ومكثف.
                     </div>
                 </div>
             )
         });
+    };
+
+    // --- RENDER EXPANDED VIEW ---
+    const renderExpandedView = () => {
+        if (!expandedSection) return null;
+        const def = METRIC_DEFINITIONS[expandedSection];
+        const activeAnalysis = getAnalysis(expandedSection);
+
+        let content = null;
+        switch (expandedSection) {
+            case 'distribution':
+                const a = gradeDistribution.A;
+                const b = gradeDistribution.B;
+                const cd = gradeDistribution.C + gradeDistribution.D;
+                const total = gradeDistribution.total;
+                content = (
+                    <div className="h-full flex flex-col items-center justify-center p-4 w-full">
+                         <div className="grid grid-cols-3 gap-4 w-full max-w-2xl">
+                            <div className="bg-emerald-500/20 p-4 rounded-2xl border border-emerald-500/50 text-center">
+                                <span className="block text-4xl font-bold text-emerald-400 mb-2">{Math.round((a/total)*100)}%</span>
+                                <span className="text-sm text-emerald-200">تحكم أقصى</span>
+                            </div>
+                            <div className="bg-blue-500/20 p-4 rounded-2xl border border-blue-500/50 text-center">
+                                <span className="block text-4xl font-bold text-blue-400 mb-2">{Math.round((b/total)*100)}%</span>
+                                <span className="text-sm text-blue-200">تحكم مقبول</span>
+                            </div>
+                            <div className="bg-red-500/20 p-4 rounded-2xl border border-red-500/50 text-center">
+                                <span className="block text-4xl font-bold text-red-400 mb-2">{Math.round((cd/total)*100)}%</span>
+                                <span className="text-sm text-red-200">تعثر (ج+د)</span>
+                            </div>
+                        </div>
+                    </div>
+                );
+                break;
+            case 'homogeneity':
+                 content = (
+                    <div className="h-full flex flex-col items-center justify-center p-4 w-full">
+                         <div className="relative w-80 h-40 bg-gray-700/50 rounded-t-full overflow-hidden mb-8 border-t-4 border-x-4 border-slate-600">
+                            <div className="absolute bottom-0 left-0 w-full h-full origin-bottom transition-transform duration-1000" style={{ transform: `rotate(${(Math.min(homogeneityIndex, 40) / 40) * 180 - 90}deg)` }}>
+                                <div className="w-2 h-full bg-white mx-auto shadow-[0_0_15px_white]"></div>
+                            </div>
+                        </div>
+                        <span className="text-6xl font-bold text-purple-400 font-mono">{homogeneityIndex.toFixed(2)}</span>
+                    </div>
+                );
+                break;
+            case 'matrix':
+                content = (
+                    <div className="h-full flex items-center justify-center w-full">
+                        <div className="aspect-square w-[400px] relative bg-slate-700/30 rounded-2xl border border-slate-600 p-4 grid grid-cols-2 grid-rows-2 gap-2">
+                            <div className="bg-blue-100 rounded flex flex-col items-center justify-center hover:bg-blue-200 transition-colors" onMouseEnter={() => setHoveredMatrixZone('q1')} onMouseLeave={() => setHoveredMatrixZone(null)}>
+                                <span className="text-2xl font-bold text-blue-800">{Math.round((performanceMatrix.knowledge_gap / performanceMatrix.total)*100)}%</span>
+                                <span className="text-sm text-blue-800 font-bold mt-1">منهجية {'>'} موارد</span>
+                            </div>
+                            <div className="bg-emerald-100 rounded flex flex-col items-center justify-center hover:bg-emerald-200 transition-colors" onMouseEnter={() => setHoveredMatrixZone('q2')} onMouseLeave={() => setHoveredMatrixZone(null)}>
+                                <span className="text-2xl font-bold text-emerald-800">{Math.round((performanceMatrix.balanced_high / performanceMatrix.total)*100)}%</span>
+                                <span className="text-sm text-emerald-800 font-bold mt-1">تحكم شامل</span>
+                            </div>
+                            <div className="bg-red-100 rounded flex flex-col items-center justify-center hover:bg-red-200 transition-colors" onMouseEnter={() => setHoveredMatrixZone('q3')} onMouseLeave={() => setHoveredMatrixZone(null)}>
+                                <span className="text-2xl font-bold text-red-800">{Math.round((performanceMatrix.struggling / performanceMatrix.total)*100)}%</span>
+                                <span className="text-sm text-red-800 font-bold mt-1">تعثر شامل</span>
+                            </div>
+                            <div className="bg-yellow-100 rounded flex flex-col items-center justify-center hover:bg-yellow-200 transition-colors" onMouseEnter={() => setHoveredMatrixZone('q4')} onMouseLeave={() => setHoveredMatrixZone(null)}>
+                                <span className="text-2xl font-bold text-yellow-800">{Math.round((performanceMatrix.method_gap / performanceMatrix.total)*100)}%</span>
+                                <span className="text-sm text-yellow-800 font-bold mt-1">موارد {'>'} منهجية</span>
+                            </div>
+                        </div>
+                    </div>
+                );
+                break;
+        }
+
+        return (
+            <div className="fixed inset-0 z-[100] bg-slate-950 text-white flex animate-in zoom-in-95 duration-300 overflow-hidden">
+                <button onClick={() => setExpandedSection(null)} className="absolute top-6 left-6 p-2 bg-white/10 hover:bg-white/20 rounded-full z-50 text-white transition-all">
+                    <Minimize2 size={24} />
+                </button>
+
+                <div className="w-[400px] lg:w-[35%] bg-slate-900 border-l border-slate-800 p-8 flex flex-col shadow-2xl relative z-40 overflow-y-auto">
+                    <div className="mb-8 pb-6 border-b border-slate-800">
+                        <h2 className="text-2xl font-bold text-white font-serif">{def.title}</h2>
+                    </div>
+
+                    <div className="space-y-8 flex-1">
+                        <div className="relative pl-4 border-r-2 border-indigo-500/50 pr-4">
+                            <h4 className="text-indigo-400 font-bold uppercase text-xs mb-2 flex items-center gap-2"><Activity size={14}/> قراءة في البيانات</h4>
+                            <p className="text-slate-300 leading-relaxed text-sm text-justify">{activeAnalysis.reading}</p>
+                        </div>
+                        <div className="relative pl-4 border-r-2 border-amber-500/50 pr-4 bg-amber-500/5 p-4 rounded-l-xl">
+                            <h4 className="text-amber-400 font-bold uppercase text-xs mb-2 flex items-center gap-2"><Microscope size={14}/> التشخيص البيداغوجي</h4>
+                            <p className="text-slate-200 leading-relaxed text-sm font-medium text-justify">{activeAnalysis.diagnosis}</p>
+                        </div>
+                        <div className="relative pl-4 border-r-2 border-emerald-500/50 pr-4">
+                            <h4 className="text-emerald-400 font-bold uppercase text-xs mb-2 flex items-center gap-2"><CheckCircle2 size={14}/> التوصية والقرار</h4>
+                            <p className="text-slate-300 leading-relaxed text-sm text-justify">{activeAnalysis.recommendation}</p>
+                        </div>
+                    </div>
+                    
+                    <div className="mt-8 pt-6 border-t border-slate-800 text-center">
+                        <p className="text-xs text-slate-500">نظام المفتش التربوي الذكي © 2025</p>
+                    </div>
+                </div>
+
+                <div className="flex-1 bg-gradient-to-br from-slate-900 to-slate-950 flex flex-col items-center p-8 relative overflow-hidden">
+                    <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '40px 40px' }}></div>
+                    
+                    {/* Top Definition Card */}
+                    <div className="w-full max-w-3xl z-20 mb-4 mt-2 animate-in slide-in-from-top-4 shrink-0">
+                         <div className="bg-white/5 backdrop-blur-md rounded-lg p-3 border border-white/10 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-1.5 bg-indigo-500/20 rounded-bl-lg border-b border-l border-white/10"><Info size={14} className="text-indigo-300"/></div>
+                            <div className="space-y-2 pt-1">
+                                 <div><h4 className="text-[11px] font-bold text-indigo-300 uppercase mb-0.5">المفهوم التربوي</h4><p className="text-xs text-white/90 leading-relaxed">{def.concept}</p></div>
+                                 <div className="pt-2 border-t border-white/10"><h4 className="text-[10px] font-bold text-slate-400 uppercase mb-0.5 flex items-center gap-1"><Ruler size={10}/> المرجعية الحسابية</h4><p className="text-[10px] text-slate-400 leading-relaxed font-mono opacity-80">{def.method}</p></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="relative z-10 w-full flex-1 flex items-center justify-center min-h-0">
+                        {content}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // --- MANUAL EDIT MODAL ---
+    const renderEditModal = () => {
+        if (!editingSection || !isEditMode) return null;
+        const currentData = getAnalysis(editingSection);
+        
+        return (
+            <EditAnalysisForm 
+                section={editingSection}
+                initialData={currentData}
+                onSave={(data) => handleSaveAnalysis(editingSection, data)}
+                onReset={() => handleResetAnalysis(editingSection)}
+                onClose={() => setEditingSection(null)}
+            />
+        );
     };
 
     if (totalStudents === 0) return <div className="text-center p-10 text-gray-400">لا توجد بيانات</div>;
@@ -309,6 +553,22 @@ const AcqYear4MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-12 relative">
             
+            {/* TOOLTIP OVERLAY */}
+            {hoveredData && (
+                <div 
+                    className="fixed z-[9999] pointer-events-none bg-slate-900 text-white px-3 py-2 rounded-lg shadow-xl text-xs max-w-xs border border-slate-700"
+                    style={{ left: hoveredData.x, top: hoveredData.y, transform: 'translate(-50%, -100%)' }}
+                >
+                    {hoveredData.title && <div className="font-bold border-b border-slate-600 pb-1 mb-1 text-yellow-400">{hoveredData.title}</div>}
+                    <div>{hoveredData.text}</div>
+                    <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-slate-900 rotate-45 border-r border-b border-slate-700"></div>
+                </div>
+            )}
+
+            {/* MODALS */}
+            {renderExpandedView()}
+            {renderEditModal()}
+
             {/* INSIGHT MODAL */}
             {activeInsight && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in" onClick={() => setActiveInsight(null)}>
@@ -371,12 +631,21 @@ const AcqYear4MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
             <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
                 <div className="bg-slate-900 text-white p-8 relative">
                     <div className="absolute top-0 right-0 p-10 opacity-10"><Calculator size={150} /></div>
-                    <div className="relative z-10">
-                        <div className="flex items-center gap-2 mb-2 text-indigo-300 font-bold uppercase tracking-widest text-xs">
-                            {scope === 'district' ? 'تحليل شامل للمقاطعة' : scope === 'school' ? 'تحليل المؤسسة' : 'تحليل الفوج'}
+                    <div className="relative z-10 flex flex-col md:flex-row justify-between items-end gap-6">
+                        <div>
+                            <div className="flex items-center gap-2 mb-2 text-indigo-300 font-bold uppercase tracking-widest text-xs">
+                                {scope === 'district' ? 'تحليل شامل للمقاطعة' : scope === 'school' ? 'تحليل المؤسسة' : 'تحليل الفوج'}
+                            </div>
+                            <h2 className="text-4xl font-bold font-serif mb-2">{YEAR4_MATH_DEF.label}</h2>
+                            <p className="text-slate-400 text-lg flex items-center gap-2"><School size={18}/> {contextName}</p>
                         </div>
-                        <h2 className="text-4xl font-bold font-serif mb-2">{YEAR4_MATH_DEF.label}</h2>
-                        <p className="text-slate-400 text-lg flex items-center gap-2"><School size={18}/> {contextName}</p>
+                        
+                        <div className="flex gap-4">
+                            <div className="bg-slate-800 p-4 rounded-2xl text-center min-w-[100px] border border-slate-700 flex flex-col justify-center">
+                                <span className="block text-3xl font-bold text-white">{totalStudents}</span>
+                                <span className="text-xs text-slate-400 font-bold">تلميذ</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 {/* KPI STATS */}
@@ -411,8 +680,11 @@ const AcqYear4MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
                 {/* Distribution */}
                 <div 
                     className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-lg hover:border-blue-300 transition-all group"
-                    onClick={showDistributionInsight}
+                    onClick={() => setExpandedSection('distribution')}
+                    onMouseEnter={(e) => handleMouseEnter(e, "توزيع التقديرات", "توزيع التلاميذ حسب مستويات التحكم الأربعة.")}
+                    onMouseLeave={handleMouseLeave}
                 >
+                    <ExpandBtn section="distribution" />
                     <div className="flex justify-between items-start mb-6">
                         <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2"><Activity size={20} className="text-blue-500"/> التوزيع</h3>
                         <Info size={16} className="text-slate-300 group-hover:text-blue-500 transition-colors"/>
@@ -435,8 +707,11 @@ const AcqYear4MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
                 {/* Homogeneity */}
                 <div 
                     className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-lg hover:border-purple-300 transition-all"
-                    onClick={showHomogeneityInsight}
+                    onClick={() => setExpandedSection('homogeneity')}
+                    onMouseEnter={(e) => handleMouseEnter(e, "مؤشر التجانس", "مدى تقارب مستويات التلاميذ في القسم.")}
+                    onMouseLeave={handleMouseLeave}
                 >
+                    <ExpandBtn section="homogeneity" />
                     <div className="flex justify-between items-start mb-6">
                         <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2"><Scale size={20} className="text-purple-500"/> التجانس</h3>
                         <Info size={16} className="text-slate-300 group-hover:text-purple-500 transition-colors"/>
@@ -451,11 +726,12 @@ const AcqYear4MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
                     <div className="text-center text-3xl font-bold text-purple-700">{homogeneityIndex.toFixed(1)}</div>
                 </div>
 
-                {/* Matrix (Resources vs Solving) */}
+                {/* Matrix (Resources vs Methodology) */}
                 <div 
                     className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-lg hover:border-teal-300 transition-all group relative lg:col-span-3 xl:col-span-1"
-                    onClick={showMatrixInsight}
+                    onClick={() => setExpandedSection('matrix')}
                 >
+                    <ExpandBtn section="matrix" />
                     <div className="flex justify-between items-start mb-4">
                         <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2"><Puzzle size={20} className="text-teal-500"/> مصفوفة (موارد/منهجية)</h3>
                         <Info size={16} className="text-slate-300 group-hover:text-teal-500 transition-colors"/>
@@ -588,6 +864,125 @@ const AcqYear4MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
                     </div>
                 </div>
             )}
+
+            {/* EDIT BUTTON FOOTER */}
+            <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
+                 <button 
+                    onClick={() => setIsEditMode(true)}
+                    className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-8 py-4 rounded-2xl font-bold text-sm transition-all shadow-xl hover:shadow-2xl border-2 border-slate-700 hover:border-slate-600 hover:scale-105 group"
+                 >
+                    <Edit size={18} className="group-hover:rotate-12 transition-transform" />
+                    <span>تعديل التحليل</span>
+                 </button>
+            </div>
+
+            {/* MANUAL EDIT MODAL */}
+            {isEditMode && (
+                <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center mb-6 border-b pb-4">
+                            <div>
+                                <h3 className="font-bold text-xl text-slate-800 flex items-center gap-2">
+                                    <Edit size={24} className="text-indigo-600"/>
+                                    تعديل التحليل الآلي
+                                </h3>
+                                <p className="text-xs text-slate-500 mt-1">يمكن للسيد المفتش تغيير التحليل أو إثراؤه بما يراه مناسباً</p>
+                            </div>
+                            <button onClick={() => setIsEditMode(false)} className="text-slate-400 hover:text-red-500"><X/></button>
+                        </div>
+                        
+                        {!editingSection ? (
+                            <div className="grid grid-cols-2 gap-4">
+                                <button onClick={() => setEditingSection('distribution')} className="p-4 bg-slate-50 hover:bg-indigo-50 border rounded-xl text-right transition-colors group">
+                                    <span className="font-bold text-slate-700 block group-hover:text-indigo-700">توزيع التقديرات</span>
+                                </button>
+                                <button onClick={() => setEditingSection('homogeneity')} className="p-4 bg-slate-50 hover:bg-indigo-50 border rounded-xl text-right transition-colors group">
+                                    <span className="font-bold text-slate-700 block group-hover:text-indigo-700">مؤشر التجانس</span>
+                                </button>
+                                <button onClick={() => setEditingSection('matrix')} className="p-4 bg-slate-50 hover:bg-indigo-50 border rounded-xl text-right transition-colors group col-span-2">
+                                    <span className="font-bold text-slate-700 block group-hover:text-indigo-700">مصفوفة التوازن</span>
+                                </button>
+                            </div>
+                        ) : (
+                             <EditAnalysisForm 
+                                section={editingSection}
+                                initialData={getAnalysis(editingSection)}
+                                onSave={(data) => handleSaveAnalysis(editingSection, data)}
+                                onReset={() => handleResetAnalysis(editingSection)}
+                                onClose={() => setEditingSection(null)}
+                            />
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Internal Component for Editing Analysis
+const EditAnalysisForm: React.FC<{
+    section: AnalysisSection;
+    initialData: AnalysisContent;
+    onSave: (data: AnalysisContent) => void;
+    onReset: () => void;
+    onClose: () => void;
+}> = ({ section, initialData, onSave, onReset, onClose }) => {
+    const [formData, setFormData] = useState(initialData);
+
+    const getTitle = () => {
+        return METRIC_DEFINITIONS[section].title;
+    };
+
+    return (
+        <div className="space-y-4 animate-in slide-in-from-right-4">
+             <div className="flex items-center justify-between">
+                 <button onClick={onClose} className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1">
+                     <ChevronRight size={12} className="rotate-180"/> عودة للقائمة
+                 </button>
+                 <span className="text-sm font-bold bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full">{getTitle()}</span>
+             </div>
+
+             <div>
+                 <label className="block text-xs font-bold text-slate-700 mb-1">قراءة في الأرقام</label>
+                 <VoiceTextarea 
+                    value={formData.reading} 
+                    onChange={(v) => setFormData({...formData, reading: v})} 
+                    className="w-full border rounded-lg p-3 text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 max-h-60 overflow-y-auto"
+                    minHeight="min-h-[120px]"
+                 />
+             </div>
+
+             <div>
+                 <label className="block text-xs font-bold text-slate-700 mb-1">الخلاصة والتشخيص</label>
+                 <VoiceTextarea 
+                    value={formData.diagnosis} 
+                    onChange={(v) => setFormData({...formData, diagnosis: v})} 
+                    className="w-full border rounded-lg p-3 text-sm bg-amber-50 focus:bg-white focus:ring-2 focus:ring-amber-500 max-h-60 overflow-y-auto"
+                    minHeight="min-h-[120px]"
+                 />
+             </div>
+
+             <div>
+                 <label className="block text-xs font-bold text-slate-700 mb-1">التوصيات والقرارات</label>
+                 <VoiceTextarea 
+                    value={formData.recommendation} 
+                    onChange={(v) => setFormData({...formData, recommendation: v})} 
+                    className="w-full border rounded-lg p-3 text-sm bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 max-h-60 overflow-y-auto"
+                    minHeight="min-h-[120px]"
+                 />
+             </div>
+
+             <div className="flex justify-between pt-4 border-t">
+                 <button onClick={onReset} className="text-red-500 text-xs font-bold flex items-center gap-1 hover:underline">
+                     <RotateCcw size={12}/> استرجاع النص الأصلي
+                 </button>
+                 <div className="flex gap-2">
+                     <button onClick={onClose} className="px-4 py-2 text-slate-500 font-bold hover:bg-slate-100 rounded-lg">إلغاء</button>
+                     <button onClick={() => onSave(formData)} className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-md flex items-center gap-2">
+                         <Save size={16}/> حفظ التعديلات
+                     </button>
+                 </div>
+             </div>
         </div>
     );
 };

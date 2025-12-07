@@ -4,7 +4,6 @@ import { AcqStudent, AcquisitionRating } from '../types/acquisitions';
 declare const XLSX: any;
 
 // Helper to normalize grades to Arabic letters
-// FIXED: Strictly check length to avoid confusing names starting with 'ب' or 'د' as grades
 const mapArabicGrade = (cell: any): AcquisitionRating => {
     if (cell === null || cell === undefined) return null;
     const str = String(cell).trim(); 
@@ -43,8 +42,7 @@ const isSummaryRow = (text: string): boolean => {
 };
 
 /**
- * Universal Parser that doesn't rely on headers.
- * It hunts for rows that look "Student Data".
+ * Universal Parser that relies on column count patterns to detect subject/level
  */
 export const parseAcqExcel = (data: ArrayBuffer, level: string, subject: string): AcqStudent[] => {
     if (typeof XLSX === 'undefined') {
@@ -70,7 +68,6 @@ export const parseAcqExcel = (data: ArrayBuffer, level: string, subject: string)
         const grades: AcquisitionRating[] = [];
         
         // 1. Try to find the name in the first 5 columns
-        // Logic: Find the longest text string that IS NOT a grade and IS NOT a summary keyword
         let potentialNameIdx = -1;
         
         for (let j = 0; j < Math.min(row.length, 6); j++) {
@@ -82,7 +79,7 @@ export const parseAcqExcel = (data: ArrayBuffer, level: string, subject: string)
             // Skip empty or very short junk
             if (cellVal.length < 3) continue;
 
-            // Skip strict grades (The fix in mapArabicGrade handles the name collision)
+            // Skip strict grades
             if (mapArabicGrade(cellVal)) continue;
 
             // Stop if summary
@@ -92,14 +89,12 @@ export const parseAcqExcel = (data: ArrayBuffer, level: string, subject: string)
             }
 
             // Found a candidate text (Name)
-            // Check if next column is also text (Last + First split)
-            // Sometimes names are split: [Last Name] [First Name]
             const nextVal = String(row[j+1] || '').trim();
             const nextIsGrade = !!mapArabicGrade(nextVal);
             const nextIsNumber = /^[\d\/\-\.]+$/.test(nextVal);
             
             if (nextVal.length > 2 && !nextIsGrade && !isSummaryRow(nextVal) && !nextIsNumber) {
-                // Merge columns
+                // Merge columns (Nom + Prénom)
                 nameCandidate = cleanName(cellVal + ' ' + nextVal);
             } else {
                 nameCandidate = cleanName(cellVal);
@@ -107,7 +102,7 @@ export const parseAcqExcel = (data: ArrayBuffer, level: string, subject: string)
             
             if (nameCandidate) {
                 potentialNameIdx = j;
-                break; // Found the name, stop looking for name in this row
+                break; // Found the name
             }
         }
 
@@ -118,134 +113,121 @@ export const parseAcqExcel = (data: ArrayBuffer, level: string, subject: string)
         // 2. If we found a potential name, look for grades in the REST of the row
         if (nameCandidate) {
             for (let k = 0; k < row.length; k++) {
-                // Don't read the name cells as grades. 
-                // Skip columns close to where we found the name to avoid reading parts of name as grade 
-                // (though mapArabicGrade length check > 3 prevents most of this now)
-                if (k <= potentialNameIdx + 1) continue;
+                // Look ahead for grades, but respect name position
+                if (k <= potentialNameIdx) continue;
 
                 const g = mapArabicGrade(row[k]);
                 if (g) grades.push(g);
             }
 
-            // 3. Validation Logic based on Level/Subject
+            // 3. Validation Logic based on Level/Subject & Count
             
-            // Case A: 2AP Arabic (8 Criteria expected)
-            if (level === '2AP' && subject.includes('العربية')) {
-                if (grades.length >= 4) { // Allow partial
-                    students.push({
-                        id: Math.random().toString(36).substr(2, 9),
-                        fullName: nameCandidate,
-                        results: {
-                            'reading_performance': {
-                                1: grades[0] || null,
-                                2: grades[1] || null,
-                                3: grades[2] || null
-                            },
-                            'written_comprehension': {
-                                1: grades[3] || null,
-                                2: grades[4] || null,
-                                3: grades[5] || null,
-                                4: grades[6] || null,
-                                5: grades[7] || null
+            // YEAR 2
+            if (level === '2AP') {
+                if (subject.includes('العربية')) {
+                    // Expecting 8 criteria
+                    if (grades.length >= 8) { 
+                        students.push({
+                            id: Math.random().toString(36).substr(2, 9),
+                            fullName: nameCandidate,
+                            results: {
+                                'reading_performance': { 1: grades[0], 2: grades[1], 3: grades[2] },
+                                'written_comprehension': { 1: grades[3], 2: grades[4], 3: grades[5], 4: grades[6], 5: grades[7] }
                             }
-                        }
-                    });
+                        });
+                    }
+                } else if (subject.includes('الرياضيات')) {
+                    // Expecting 6 criteria
+                    if (grades.length >= 6) {
+                        students.push({
+                            id: Math.random().toString(36).substr(2, 9),
+                            fullName: nameCandidate,
+                            results: {
+                                'control_numbers': { 1: grades[0], 2: grades[1] },
+                                'problem_solving': { 1: grades[2], 2: grades[3], 3: grades[4], 4: grades[5] }
+                            }
+                        });
+                    }
                 }
             } 
-            // Case B: 2AP Math (6 Criteria expected)
-            else if (level === '2AP' && subject.includes('الرياضيات')) {
-                if (grades.length >= 3) {
-                    students.push({
-                        id: Math.random().toString(36).substr(2, 9),
-                        fullName: nameCandidate,
-                        results: {
-                            'control_numbers': {
-                                1: grades[0] || null,
-                                2: grades[1] || null
-                            },
-                            'problem_solving': {
-                                1: grades[2] || null,
-                                2: grades[3] || null,
-                                3: grades[4] || null,
-                                4: grades[5] || null
+            
+            // YEAR 4
+            else if (level === '4AP') {
+                if (subject.includes('العربية')) {
+                    // Expecting 19 criteria (5+4+5+5)
+                    if (grades.length >= 19) { 
+                        students.push({
+                            id: Math.random().toString(36).substr(2, 9),
+                            fullName: nameCandidate,
+                            results: {
+                                'oral_comms': { 1: grades[0], 2: grades[1], 3: grades[2], 4: grades[3], 5: grades[4] },
+                                'reading_perf': { 1: grades[5], 2: grades[6], 3: grades[7], 4: grades[8] },
+                                'written_comp': { 1: grades[9], 2: grades[10], 3: grades[11], 4: grades[12], 5: grades[13] },
+                                'written_prod': { 1: grades[14], 2: grades[15], 3: grades[16], 4: grades[17], 5: grades[18] }
                             }
-                        }
-                    });
+                        });
+                    }
+                } else if (subject.includes('الرياضيات')) {
+                    // Expecting 7 criteria (3+4)
+                    if (grades.length >= 7) {
+                        students.push({
+                            id: Math.random().toString(36).substr(2, 9),
+                            fullName: nameCandidate,
+                            results: {
+                                'control_resources': { 1: grades[0], 2: grades[1], 3: grades[2] },
+                                'methodological_solving': { 1: grades[3], 2: grades[4], 3: grades[5], 4: grades[6] }
+                            }
+                        });
+                    }
                 }
             }
-            // Case C: 4AP Arabic (19 Criteria expected)
-            else if (level === '4AP' && subject.includes('العربية')) {
-                if (grades.length >= 10) { 
-                    students.push({
-                        id: Math.random().toString(36).substr(2, 9),
-                        fullName: nameCandidate,
-                        results: {
-                            'oral_comms': {
-                                1: grades[0] || null, 2: grades[1] || null, 3: grades[2] || null, 4: grades[3] || null, 5: grades[4] || null
-                            },
-                            'reading_perf': {
-                                1: grades[5] || null, 2: grades[6] || null, 3: grades[7] || null, 4: grades[8] || null
-                            },
-                            'written_comp': {
-                                1: grades[9] || null, 2: grades[10] || null, 3: grades[11] || null, 4: grades[12] || null, 5: grades[13] || null
-                            },
-                            'written_prod': {
-                                1: grades[14] || null, 2: grades[15] || null, 3: grades[16] || null, 4: grades[17] || null, 5: grades[18] || null
+            
+            // YEAR 5
+            else if (level === '5AP') {
+                if (subject.includes('العربية')) {
+                    // Expecting 26 criteria (6+4+9+7)
+                    if (grades.length >= 26) { 
+                        students.push({
+                            id: Math.random().toString(36).substr(2, 9),
+                            fullName: nameCandidate,
+                            results: {
+                                'oral_comms': { 
+                                    1: grades[0], 2: grades[1], 3: grades[2], 4: grades[3], 5: grades[4], 6: grades[5] 
+                                },
+                                'reading_perf': { 
+                                    1: grades[6], 2: grades[7], 3: grades[8], 4: grades[9] 
+                                },
+                                'written_comp': { 
+                                    1: grades[10], 2: grades[11], 3: grades[12], 4: grades[13], 5: grades[14], 
+                                    6: grades[15], 7: grades[16], 8: grades[17], 9: grades[18]
+                                },
+                                'written_prod': { 
+                                    1: grades[19], 2: grades[20], 3: grades[21], 4: grades[22], 5: grades[23], 
+                                    6: grades[24], 7: grades[25]
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
+                } else if (subject.includes('الرياضيات')) {
+                    // Expecting 14 criteria (4+3+3+4)
+                    if (grades.length >= 14) {
+                        students.push({
+                            id: Math.random().toString(36).substr(2, 9),
+                            fullName: nameCandidate,
+                            results: {
+                                'control_numbers': { 1: grades[0], 2: grades[1], 3: grades[2], 4: grades[3] },
+                                'geometry_space': { 1: grades[4], 2: grades[5], 3: grades[6] },
+                                'measurements': { 1: grades[7], 2: grades[8], 3: grades[9] },
+                                'data_org': { 1: grades[10], 2: grades[11], 3: grades[12], 4: grades[13] }
+                            }
+                        });
+                    }
                 }
             }
-            // Case D: 4AP Math (7 Criteria expected)
-            else if (level === '4AP' && subject.includes('الرياضيات')) {
-                if (grades.length >= 4) {
-                    students.push({
-                        id: Math.random().toString(36).substr(2, 9),
-                        fullName: nameCandidate,
-                        results: {
-                            'control_resources': {
-                                1: grades[0] || null,
-                                2: grades[1] || null,
-                                3: grades[2] || null
-                            },
-                            'methodological_solving': {
-                                1: grades[3] || null,
-                                2: grades[4] || null,
-                                3: grades[5] || null,
-                                4: grades[6] || null
-                            }
-                        }
-                    });
-                }
-            }
-            // Case E: 5AP Arabic (26 Criteria expected)
-            else if (level === '5AP' && subject.includes('العربية')) {
-                if (grades.length >= 15) { // Threshold to accept row
-                    students.push({
-                        id: Math.random().toString(36).substr(2, 9),
-                        fullName: nameCandidate,
-                        results: {
-                            'oral_comms': {
-                                1: grades[0] || null, 2: grades[1] || null, 3: grades[2] || null, 4: grades[3] || null, 5: grades[4] || null, 6: grades[5] || null
-                            },
-                            'reading_perf': {
-                                1: grades[6] || null, 2: grades[7] || null, 3: grades[8] || null, 4: grades[9] || null
-                            },
-                            'written_comp': {
-                                1: grades[10] || null, 2: grades[11] || null, 3: grades[12] || null, 4: grades[13] || null, 
-                                5: grades[14] || null, 6: grades[15] || null, 7: grades[16] || null, 8: grades[17] || null, 9: grades[18] || null
-                            },
-                            'written_prod': {
-                                1: grades[19] || null, 2: grades[20] || null, 3: grades[21] || null, 4: grades[22] || null, 
-                                5: grades[23] || null, 6: grades[24] || null, 7: grades[25] || null
-                            }
-                        }
-                    });
-                }
-            }
-            // Fallback
+            
+            // Fallback (Generic)
             else {
-                if (grades.length >= 2) {
+                if (grades.length >= 1) {
                     students.push({
                         id: Math.random().toString(36).substr(2, 9),
                         fullName: nameCandidate,

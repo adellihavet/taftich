@@ -1,4 +1,5 @@
 
+
 import React, { useMemo, useState } from 'react';
 import { AcqClassRecord, AcqFilterState } from '../../types/acquisitions';
 import { BarChart2, PieChart, FileText } from 'lucide-react';
@@ -7,6 +8,7 @@ import AcqYear2MathStats from './Analytics/AcqYear2MathStats';
 import AcqYear4ArabicStats from './Analytics/AcqYear4ArabicStats';
 import AcqYear4MathStats from './Analytics/AcqYear4MathStats';
 import AcqYear5ArabicStats from './Analytics/AcqYear5ArabicStats';
+import AcqYear5MathStats from './Analytics/AcqYear5MathStats';
 import AcqTeacherProfile from './Analytics/AcqTeacherProfile';
 import AcqStructuredAnalysis from './Analytics/AcqStructuredAnalysis';
 
@@ -125,6 +127,12 @@ const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters 
                                 scope={scope}
                                 contextName={scope === 'district' ? 'المقاطعة' : scope === 'school' ? selectedSchool : `${selectedSchool} - ${selectedClass}`}
                             />
+                        ) : selectedLevel === '5AP' && selectedSubject.includes('الرياضيات') ? (
+                            <AcqYear5MathStats
+                                records={filteredRecords}
+                                scope={scope}
+                                contextName={scope === 'district' ? 'المقاطعة' : scope === 'school' ? selectedSchool : `${selectedSchool} - ${selectedClass}`}
+                            />
                         ) : (
                             <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden min-h-[400px] flex flex-col">
                                 <div className="bg-slate-900 text-white p-6 flex justify-between items-start">
@@ -152,6 +160,7 @@ const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters 
                                             <li>اللغة العربية (السنة الرابعة)</li>
                                             <li>الرياضيات (السنة الرابعة)</li>
                                             <li>اللغة العربية (السنة الخامسة)</li>
+                                            <li>الرياضيات (السنة الخامسة)</li>
                                         </ul>
                                     </p>
                                 </div>

@@ -365,8 +365,8 @@ const AcqYear2ArabicStats: React.FC<Props> = ({ records, scope, contextName }) =
                 const cd = gradeDistribution.C + gradeDistribution.D;
                 const total = gradeDistribution.total;
                 content = (
-                    <div className="h-full flex flex-col items-center justify-center p-10 w-full">
-                         <div className="grid grid-cols-3 gap-4 w-full max-w-2xl mb-8">
+                    <div className="h-full flex flex-col items-center justify-center p-4 w-full">
+                         <div className="grid grid-cols-3 gap-4 w-full max-w-2xl">
                             <div className="bg-emerald-500/20 p-4 rounded-2xl border border-emerald-500/50 text-center">
                                 <span className="block text-4xl font-bold text-emerald-400 mb-2">{Math.round((a/total)*100)}%</span>
                                 <span className="text-sm text-emerald-200">تحكم أقصى</span>
@@ -385,7 +385,7 @@ const AcqYear2ArabicStats: React.FC<Props> = ({ records, scope, contextName }) =
                 break;
             case 'homogeneity':
                  content = (
-                    <div className="h-full flex flex-col items-center justify-center p-10 w-full">
+                    <div className="h-full flex flex-col items-center justify-center p-4 w-full">
                          <div className="relative w-80 h-40 bg-gray-700/50 rounded-t-full overflow-hidden mb-8 border-t-4 border-x-4 border-slate-600">
                             <div className="absolute bottom-0 left-0 w-full h-full origin-bottom transition-transform duration-1000" style={{ transform: `rotate(${(Math.min(homogeneityIndex, 40) / 40) * 180 - 90}deg)` }}>
                                 <div className="w-2 h-full bg-white mx-auto shadow-[0_0_15px_white]"></div>
@@ -429,14 +429,6 @@ const AcqYear2ArabicStats: React.FC<Props> = ({ records, scope, contextName }) =
 
                 <div className="w-[400px] lg:w-[35%] bg-slate-900 border-l border-slate-800 p-8 flex flex-col shadow-2xl relative z-40 overflow-y-auto">
                     <div className="mb-8 pb-6 border-b border-slate-800">
-                         {/* Static Definition Card */}
-                         <div className="bg-white/5 backdrop-blur-md rounded-lg p-3 border border-white/10 mb-4 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 p-1.5 bg-indigo-500/20 rounded-bl-lg border-b border-l border-white/10"><Info size={14} className="text-indigo-300"/></div>
-                            <div className="space-y-2 pt-1">
-                                 <div><h4 className="text-[11px] font-bold text-indigo-300 uppercase mb-0.5">المفهوم التربوي</h4><p className="text-xs text-white/90 leading-relaxed">{def.concept}</p></div>
-                                 <div className="pt-2 border-t border-white/10"><h4 className="text-[10px] font-bold text-slate-400 uppercase mb-0.5 flex items-center gap-1"><Ruler size={10}/> المرجعية الحسابية</h4><p className="text-[10px] text-slate-400 leading-relaxed font-mono opacity-80">{def.method}</p></div>
-                            </div>
-                        </div>
                         <h2 className="text-2xl font-bold text-white font-serif">{def.title}</h2>
                     </div>
 
@@ -460,9 +452,23 @@ const AcqYear2ArabicStats: React.FC<Props> = ({ records, scope, contextName }) =
                     </div>
                 </div>
 
-                <div className="flex-1 bg-gradient-to-br from-slate-900 to-slate-950 flex items-center justify-center p-8 relative overflow-hidden">
+                <div className="flex-1 bg-gradient-to-br from-slate-900 to-slate-950 flex flex-col items-center p-8 relative overflow-hidden">
                     <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '40px 40px' }}></div>
-                    <div className="relative z-10 w-full h-full flex items-center justify-center">{content}</div>
+                    
+                    {/* Top Definition Card */}
+                    <div className="w-full max-w-3xl z-20 mb-4 mt-2 animate-in slide-in-from-top-4 shrink-0">
+                         <div className="bg-white/5 backdrop-blur-md rounded-lg p-3 border border-white/10 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-1.5 bg-indigo-500/20 rounded-bl-lg border-b border-l border-white/10"><Info size={14} className="text-indigo-300"/></div>
+                            <div className="space-y-2 pt-1">
+                                 <div><h4 className="text-[11px] font-bold text-indigo-300 uppercase mb-0.5">المفهوم التربوي</h4><p className="text-xs text-white/90 leading-relaxed">{def.concept}</p></div>
+                                 <div className="pt-2 border-t border-white/10"><h4 className="text-[10px] font-bold text-slate-400 uppercase mb-0.5 flex items-center gap-1"><Ruler size={10}/> المرجعية الحسابية</h4><p className="text-[10px] text-slate-400 leading-relaxed font-mono opacity-80">{def.method}</p></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="relative z-10 w-full flex-1 flex items-center justify-center min-h-0">
+                        {content}
+                    </div>
                 </div>
             </div>
         );
