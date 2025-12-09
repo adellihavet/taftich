@@ -9,9 +9,9 @@ interface PrintableQuarterlyReportProps {
 
 const PrintableQuarterlyReport: React.FC<PrintableQuarterlyReportProps> = ({ report, signature }) => {
     
-  const totalDays = Object.values(report.days).reduce((a, b) => a + b, 0);
-  const totalRanks = Object.values(report.ranks).reduce((a, b) => a + b, 0);
-  const totalLevels = Object.values(report.levels).reduce((a, b) => a + b, 0);
+  const totalDays = (Object.values(report.days) as number[]).reduce((a, b) => a + b, 0);
+  const totalRanks = (Object.values(report.ranks) as number[]).reduce((a, b) => a + b, 0);
+  const totalLevels = (Object.values(report.levels) as number[]).reduce((a, b) => a + b, 0);
   
   const totalSubjects = (report.subjects.arabic || 0) + (report.subjects.math || 0) + (report.subjects.islamic || 0) +
                         (report.subjects.history || 0) + (report.subjects.geo || 0) + (report.subjects.civics || 0) +
@@ -266,14 +266,22 @@ const PrintableQuarterlyReport: React.FC<PrintableQuarterlyReportProps> = ({ rep
             <div className="flex flex-col items-end px-8 text-sm font-bold shrink-0 mt-8 mb-4">
                  <p className="mb-4">حرر بـ: {report.wilaya} في: {currentDate}</p>
                  <div className="text-center w-64 relative flex flex-col items-center">
-                    <p className="mb-10 underline">مفتش التعليم الابتدائي</p>
+                    <p className="mb-12 underline">مفتش التعليم الابتدائي</p>
                     
-                    {/* Signature Container */}
-                    <div className="h-24 w-full relative flex items-center justify-center">
-                        {signature && (
-                            <img src={signature} alt="Signature" className="absolute w-full h-full object-contain mix-blend-multiply transform scale-125 -rotate-2 top-0" />
-                        )}
-                    </div>
+                    {/* Signature Container - Overlaid and Realistic */}
+                    {signature ? (
+                        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 w-48 h-32 flex items-center justify-center pointer-events-none z-10">
+                            <img 
+                                src={signature} 
+                                alt="Signature" 
+                                className="w-full h-full object-contain mix-blend-multiply transform -rotate-6 scale-150 opacity-90" 
+                            />
+                        </div>
+                    ) : (
+                        <div className="mt-2 text-[8px] text-gray-300 border border-dashed border-gray-300 w-16 h-16 rounded-full flex items-center justify-center rotate-[-15deg]">
+                            الختم
+                        </div>
+                    )}
                  </div>
             </div>
 

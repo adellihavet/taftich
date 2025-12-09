@@ -99,7 +99,7 @@ const QuarterlyReportEditor: React.FC<QuarterlyReportEditorProps> = ({
             };
 
             // 1. Process Inspection Visits (Modern & Legacy)
-            Object.values(reportsMap).forEach(r => {
+            Object.values(reportsMap).forEach((r: ReportData) => {
                 if (!r.inspectionDate) return;
                 
                 // Parse date safely
@@ -177,15 +177,15 @@ const QuarterlyReportEditor: React.FC<QuarterlyReportEditorProps> = ({
             // 3. Count Totals
             const totalTeachers = teachers.length;
             const trainees = teachers.filter(t => t.status === 'stagiere').length;
-            // Tenure Candidates: Any stagiere is technically a candidate for tenure visit
-            const tenureCandidates = trainees; 
+            
+            // NOTE: We do NOT auto-calculate 'teachersTenure'. It stays manual as requested.
 
             onChange({
                 ...report,
                 ...stats,
                 teachersTotal: totalTeachers,
                 teachersTrainee: trainees,
-                teachersTenure: tenureCandidates 
+                // teachersTenure is preserved from ...report
             });
 
             setIsCalculating(false);

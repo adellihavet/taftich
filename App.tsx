@@ -58,7 +58,7 @@ const App: React.FC = () => {
   const [inspectorName, setInspectorName] = useState('');
   const [isEditingInspector, setIsEditingInspector] = useState(false);
   const [signature, setSignature] = useState<string | undefined>(undefined);
-  // NEW: Global Toggle for Signature Visibility
+  // NEW: Global Toggle for Signature Visibility (Restored)
   const [showSignature, setShowSignature] = useState<boolean>(true);
 
   const [currentReport, setCurrentReport] = useState<ReportData>(INITIAL_REPORT_STATE);
@@ -95,7 +95,7 @@ const App: React.FC = () => {
 
   const availableSchools = useMemo(() => {
       const schools = new Set<string>();
-      Object.values(reportsMap).forEach(r => { if(r.school) schools.add(r.school.trim()); });
+      Object.values(reportsMap).forEach((r: ReportData) => { if(r.school) schools.add(r.school.trim()); });
       return Array.from(schools).sort();
   }, [reportsMap]);
 
@@ -109,7 +109,7 @@ const App: React.FC = () => {
 
       // 2. Add schools from the Main Database (Reports Map)
       // This ensures the dropdown includes all schools defined in the Google Sheet / Database
-      Object.values(reportsMap).forEach(r => { 
+      Object.values(reportsMap).forEach((r: ReportData) => { 
           if(r.school && r.school.trim() !== '') {
               schools.add(r.school.trim()); 
           }
@@ -120,7 +120,7 @@ const App: React.FC = () => {
 
   const availableLevels = useMemo(() => {
       const levels = new Set<string>();
-      Object.values(reportsMap).forEach(r => { if(r.level) levels.add(r.level.trim()); });
+      Object.values(reportsMap).forEach((r: ReportData) => { if(r.level) levels.add(r.level.trim()); });
       return Array.from(levels).sort();
   }, [reportsMap]);
 
@@ -140,13 +140,13 @@ const App: React.FC = () => {
 
       // If current report has no district (default state), try to find it in previous reports
       if (!d || d.trim() === '') {
-          const reportWithDistrict = Object.values(reportsMap).find(r => r.district && r.district.trim() !== '');
+          const reportWithDistrict = Object.values(reportsMap).find((r: ReportData) => r.district && r.district.trim() !== '');
           if (reportWithDistrict) d = reportWithDistrict.district;
       }
 
       // Same for Wilaya, ignoring default 'الأغواط' if a better one exists
       if (!w || w === 'الأغواط') {
-          const reportWithWilaya = Object.values(reportsMap).find(r => r.wilaya && r.wilaya.trim() !== '' && r.wilaya !== 'الأغواط');
+          const reportWithWilaya = Object.values(reportsMap).find((r: ReportData) => r.wilaya && r.wilaya.trim() !== '' && r.wilaya !== 'الأغواط');
           if (reportWithWilaya) w = reportWithWilaya.wilaya;
       }
 
@@ -156,24 +156,30 @@ const App: React.FC = () => {
       };
   }, [currentReport, reportsMap]);
 
-  // --- AUTOMATIC RECORD UPDATE (30 DAYS RULE) ---
+  // --- AUTOMATIC RECORD UPDATE (The 15-Day Rule) ---
   useEffect(() => {
       const today = new Date();
       let updatedCount = 0;
       
       const newTeachers = teachers.map(t => {
           const report = reportsMap[t.id];
-          // If report exists AND has a date AND has a mark
+          
+          // Logic: Only update teacher's profile if:
+          // 1. Report exists and has a date
+          // 2. Report has a valid final mark (> 0)
+          // 3. The inspection date is OLDER than 15 days from today
+          
           if (report && report.inspectionDate && report.finalMark > 0) {
               const reportDate = new Date(report.inspectionDate);
-              if (!isNaN(reportDate.getTime()) && t.lastInspectionDate !== report.inspectionDate) {
+              
+              if (!isNaN(reportDate.getTime())) {
                   // Calculate diff in days
-                  const diffTime = Math.abs(today.getTime() - reportDate.getTime());
+                  const diffTime = today.getTime() - reportDate.getTime();
                   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
 
-                  // Condition: More than 30 days passed since previous value or just update if new
-                  // Here simplified: if report is newer/different, update teacher profile
-                  if (diffDays < 365) { // Sanity check: don't auto update if date is ancient
+                  // CRITICAL FIX: Only update if the report is older than 15 days
+                  // This prevents the "Last Mark" from changing to "1" while drafting a new report.
+                  if (diffDays > 15 && t.lastInspectionDate !== report.inspectionDate) {
                       updatedCount++;
                       return {
                           ...t,
@@ -188,7 +194,7 @@ const App: React.FC = () => {
 
       if (updatedCount > 0) {
           setTeachers(newTeachers);
-          console.log(`Updated ${updatedCount} teacher records automatically.`);
+          console.log(`Updated ${updatedCount} teacher records automatically (15-day rule applied).`);
       }
   }, [reportsMap]); 
 
@@ -255,6 +261,7 @@ const App: React.FC = () => {
     if (savedMembership === 'true') setIsGoldMember(true);
     if (savedInspectorName) setInspectorName(savedInspectorName);
     if (savedSignature) setSignature(savedSignature);
+    // Restore the toggle state (default to true if not found)
     if (savedShowSignature !== null) setShowSignature(savedShowSignature === 'true');
 
     const scriptUrl = localStorage.getItem('mufattish_script_url');
@@ -263,7 +270,6 @@ const App: React.FC = () => {
         
         // --- AUTO-RESTORE LOGIC ---
         // If local data is empty but we have a script URL, try to fetch silently
-        // We check 'savedTeachers' string directly to avoid race conditions with state update
         if (!savedTeachers || savedTeachers === '[]') {
             console.log("Local data empty, attempting auto-restore from cloud...");
             setSyncStatus('syncing');
@@ -298,6 +304,7 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('mufattish_quarterly_report', JSON.stringify(currentQuarterlyReport)); }, [currentQuarterlyReport]);
   useEffect(() => { localStorage.setItem('mufattish_is_gold', isGoldMember.toString()); }, [isGoldMember]);
   useEffect(() => { localStorage.setItem('mufattish_inspector_name', inspectorName); }, [inspectorName]);
+  // Save toggle state
   useEffect(() => { localStorage.setItem('mufattish_show_signature', String(showSignature)); }, [showSignature]);
   
   // Save View & Selected Teacher
@@ -318,8 +325,16 @@ const App: React.FC = () => {
 
       setSyncStatus('syncing');
       
+      // Increased debounce time to 5 seconds to reduce API calls
       const timer = setTimeout(async () => {
           try {
+              // Safety check: Don't sync if data looks dangerously empty
+              if (teachers.length === 0) {
+                  console.warn("Skipping auto-sync: Teacher list is empty.");
+                  setSyncStatus('idle');
+                  return;
+              }
+
               const data = generateDatabaseRows(teachers, currentReport, reportsMap);
               await syncWithScript(scriptUrl, data);
               setSyncStatus('success');
@@ -328,9 +343,9 @@ const App: React.FC = () => {
           } catch (error: any) {
               console.error("Sync Error:", error);
               setSyncStatus('error');
-              setSyncMessage('فشل المزامنة');
+              setSyncMessage('فشل المزامنة - يرجى الحفظ يدوياً');
           }
-      }, 4000);
+      }, 5000);
 
       return () => clearTimeout(timer);
   }, [teachers, reportsMap, tenureReportsMap, autoSyncEnabled, isGoogleConnected]);
@@ -399,7 +414,7 @@ const App: React.FC = () => {
               id: generateId(),
               teacherId: teacher.id,
               wilaya: currentReport.wilaya || derivedGlobalData.wilaya, 
-              district: currentReport.district || derivedGlobalData.district,
+              district: currentReport.district || derivedGlobalData.district, 
               school: currentReport.school || '',
               inspectorName: inspectorName
           };
@@ -740,7 +755,7 @@ const App: React.FC = () => {
                         )}
                     </div>
                     
-                    {/* GLOBAL SIGNATURE TOGGLE */}
+                    {/* GLOBAL SIGNATURE TOGGLE - RESTORED */}
                     {signature && (
                         <div className="mt-3 pt-2 border-t border-blue-800/50 flex items-center justify-between">
                             <div className="flex items-center gap-1.5 text-blue-200">

@@ -1,23 +1,27 @@
-
 import React, { useMemo } from 'react';
-import { AcqGlobalRecord, AcqFilterState, AcqGlobalStudent, AcqClassRecord } from '../../../types/acquisitions';
-import { FileText, Target, Users, BarChart3, School, Map, BookOpen, Calculator, Info } from 'lucide-react';
+import { AcqGlobalRecord, AcqFilterState, AcqGlobalStudent } from '../../../types/acquisitions';
+import { FileText, Target, Users, BarChart3, School, Map, BookOpen, Calculator } from 'lucide-react';
 
 interface Props {
     globalRecords: AcqGlobalRecord[];
-    detailedRecords: AcqClassRecord[]; // New prop to check for detailed grids
     filters: AcqFilterState;
 }
 
-const AcqStructuredAnalysis: React.FC<Props> = ({ globalRecords, detailedRecords, filters }) => {
+const AcqStructuredAnalysis: React.FC<Props> = ({ globalRecords, filters }) => {
     
-    // --- 1. FILTER DATA ---
+    // --- 1. FILTER DATA & BUILD STUDENT LIST WITH CONFIG ---
+    // We attach the 'includeAmazigh' flag to every student based on their school record
     const processedStudents = useMemo(() => {
-        let students: AcqGlobalStudent[] = [];
+        let students: (AcqGlobalStudent & { includeAmazigh: boolean })[] = [];
         
         globalRecords.forEach(record => {
             if (filters.scope === 'district' || record.schoolName === filters.selectedSchool) {
-                students = [...students, ...record.students];
+                // Map students and attach the school's configuration
+                const schoolStudents = record.students.map(s => ({
+                    ...s,
+                    includeAmazigh: record.includeAmazigh // Critical: Use the flag saved in DB for this school
+                }));
+                students = [...students, ...schoolStudents];
             }
         });
         
@@ -26,46 +30,22 @@ const AcqStructuredAnalysis: React.FC<Props> = ({ globalRecords, detailedRecords
 
     const totalStudents = processedStudents.length;
 
-    // --- 2. CALCULATE INDICATORS WITH SMART EXCLUSION ---
+    // --- 2. CALCULATE INDICATORS (PER STUDENT LOGIC) ---
     const stats = useMemo(() => {
-        if (totalStudents === 0) return { general: 0, eliteCount: 0, successCount: 0, qualitative: 0, relative: 0, avgSubjects: 0, excludedAmazigh: false };
+        if (totalStudents === 0) return { general: 0, eliteCount: 0, successCount: 0, qualitative: 0, relative: 0, avgSubjects: 0 };
 
-        let totalSubjectCount = 0;
+        let totalSubjectCount = 0; // Cumulative count of all subjects studied by all students
         let eliteCount = 0;
         let successCount = 0;
-        let excludedAmazigh = false;
-
-        // Check Amazigh Status Globally for this batch
-        const amazighKey = 'اللغة الأمازيغية';
-        let isAmazighSuspicious = false;
-
-        // Condition 1: Are all students getting 'D' (or null) in Amazigh?
-        const hasAmazighInGrid = processedStudents.some(s => s.subjects[amazighKey]);
-        if (hasAmazighInGrid) {
-            const allDs = processedStudents.every(s => !s.subjects[amazighKey] || s.subjects[amazighKey] === 'D');
-            if (allDs) {
-                // Condition 2: Is there a Detailed Record for Amazigh?
-                // We check if ANY detailed record exists for Amazigh in the selected scope
-                const hasDetailedAmazigh = detailedRecords.some(r => {
-                    const matchesScope = filters.scope === 'district' || r.schoolName === filters.selectedSchool;
-                    return matchesScope && (r.subject.includes('الأمازيغية') || r.subject.includes('أمازيغية'));
-                });
-
-                if (!hasDetailedAmazigh) {
-                    isAmazighSuspicious = true;
-                    excludedAmazigh = true;
-                }
-            }
-        }
 
         processedStudents.forEach(student => {
             // Determine active subjects for THIS student
-            let studentSubjects = Object.keys(student.subjects);
-
-            // Filter out Amazigh if it's determined to be fake/empty
-            if (isAmazighSuspicious) {
-                studentSubjects = studentSubjects.filter(subj => subj !== amazighKey);
-            }
+            const studentSubjects = Object.keys(student.subjects).filter(subj => {
+                if (subj.includes('الأمازيغية') || subj.includes('امازيغية')) {
+                    return student.includeAmazigh; // Only include if school flag is TRUE
+                }
+                return true; // All other subjects are always included
+            });
 
             // General Satisfaction Accumulator
             totalSubjectCount += studentSubjects.length;
@@ -90,11 +70,10 @@ const AcqStructuredAnalysis: React.FC<Props> = ({ globalRecords, detailedRecords
             qualitative: (eliteCount / totalStudents) * 100,
             relative: (successCount / totalStudents) * 100,
             // Average subjects per student (for display context only)
-            avgSubjects: Math.round(totalSubjectCount / totalStudents),
-            excludedAmazigh
+            avgSubjects: Math.round(totalSubjectCount / totalStudents)
         };
 
-    }, [processedStudents, totalStudents, detailedRecords, filters]);
+    }, [processedStudents, totalStudents]);
 
 
     if (totalStudents === 0) {
@@ -122,18 +101,10 @@ const AcqStructuredAnalysis: React.FC<Props> = ({ globalRecords, detailedRecords
                     </p>
                 </div>
 
-                <div className="flex flex-col items-end gap-2">
-                    <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm flex items-center gap-3 text-xs font-bold text-slate-600">
-                        <span className="flex items-center gap-1"><Users size={14}/> {totalStudents} تلميذ</span>
-                        <span className="h-4 w-px bg-slate-300"></span>
-                        <span className="flex items-center gap-1"><BookOpen size={14}/> {stats.avgSubjects} مواد (المتوسط)</span>
-                    </div>
-                    {stats.excludedAmazigh && (
-                        <div className="bg-amber-50 text-amber-700 px-3 py-1 rounded-lg border border-amber-200 text-[10px] font-bold flex items-center gap-1.5 animate-in fade-in">
-                            <Info size={12}/>
-                            تم استبعاد الأمازيغية من الحساب لعدم تدريسها
-                        </div>
-                    )}
+                <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm flex items-center gap-3 text-xs font-bold text-slate-600">
+                    <span className="flex items-center gap-1"><Users size={14}/> {totalStudents} تلميذ</span>
+                    <span className="h-4 w-px bg-slate-300"></span>
+                    <span className="flex items-center gap-1"><BookOpen size={14}/> {stats.avgSubjects} مواد (المتوسط)</span>
                 </div>
             </div>
 

@@ -10,8 +10,8 @@ import AcqYear5ArabicStats from './Analytics/AcqYear5ArabicStats';
 import AcqYear5MathStats from './Analytics/AcqYear5MathStats';
 import AcqYear5IslamicStats from './Analytics/AcqYear5IslamicStats';
 import AcqYear5HistoryStats from './Analytics/AcqYear5HistoryStats';
+import AcqYear5CivicsStats from './Analytics/AcqYear5CivicsStats';
 import AcqTeacherProfile from './Analytics/AcqTeacherProfile';
-import AcqStructuredAnalysis from './Analytics/AcqStructuredAnalysis';
 
 interface AcqStatsDashboardProps {
     records: AcqClassRecord[];
@@ -21,7 +21,6 @@ interface AcqStatsDashboardProps {
 
 const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters }) => {
     const { scope, selectedSchool, selectedLevel, selectedClass, selectedSubject } = filters;
-    const [showStructuredAnalysis, setShowStructuredAnalysis] = useState(false);
 
     const filteredRecords = useMemo(() => {
         return records.filter(r => {
@@ -48,11 +47,6 @@ const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters 
         );
     }, [records, scope, selectedSchool, selectedClass, selectedLevel]);
 
-    const analysisRecords = useMemo(() => {
-        if (scope === 'district' && !selectedLevel) return records; 
-        return filteredRecords;
-    }, [scope, selectedLevel, records, filteredRecords]);
-
     const isReadyToAnalyze = useMemo(() => {
         if (!selectedLevel || !selectedSubject) return false;
         if (scope === 'school' && !selectedSchool) return false;
@@ -67,24 +61,8 @@ const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters 
                 <div className="text-sm text-slate-500">
                     <span className="font-bold text-slate-700">النطاق الحالي:</span> {scope === 'district' ? 'المقاطعة' : scope === 'school' ? selectedSchool : `${selectedSchool} / ${selectedClass}`}
                 </div>
-                
-                <button 
-                    onClick={() => setShowStructuredAnalysis(true)}
-                    className="bg-indigo-600 text-white px-5 py-2 rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center gap-2 font-bold text-sm animate-in slide-in-from-top-2"
-                >
-                    <FileText size={18} />
-                    تقرير المعالجة المهيكلة (الوزاري)
-                </button>
+                {/* Button removed as requested */}
             </div>
-
-            {showStructuredAnalysis && (
-                <AcqStructuredAnalysis 
-                    records={analysisRecords}
-                    scope={scope}
-                    contextName={scope === 'district' ? 'المقاطعة' : scope === 'school' ? selectedSchool : `${selectedSchool} - ${selectedClass}`}
-                    onClose={() => setShowStructuredAnalysis(false)}
-                />
-            )}
 
             <div className="flex-1 p-6 md:p-8 overflow-y-auto">
                 {isReadyToAnalyze ? (
@@ -148,6 +126,12 @@ const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters 
                                 scope={scope}
                                 contextName={scope === 'district' ? 'المقاطعة' : scope === 'school' ? selectedSchool : `${selectedSchool} - ${selectedClass}`}
                             />
+                        ) : selectedLevel === '5AP' && selectedSubject.includes('مدنية') ? (
+                            <AcqYear5CivicsStats
+                                records={filteredRecords}
+                                scope={scope}
+                                contextName={scope === 'district' ? 'المقاطعة' : scope === 'school' ? selectedSchool : `${selectedSchool} - ${selectedClass}`}
+                            />
                         ) : (
                             <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden min-h-[400px] flex flex-col">
                                 <div className="bg-slate-900 text-white p-6 flex justify-between items-start">
@@ -178,6 +162,7 @@ const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters 
                                             <li>الرياضيات (السنة الخامسة)</li>
                                             <li>التربية الإسلامية (السنة الخامسة)</li>
                                             <li>التاريخ (السنة الخامسة)</li>
+                                            <li>التربية المدنية (السنة الخامسة)</li>
                                         </ul>
                                     </p>
                                 </div>
@@ -194,14 +179,6 @@ const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters 
                         <p className="text-slate-400 max-w-sm text-center mb-6">
                             يرجى استخدام <b>القائمة العلوية</b> لاختيار النطاق، المدرسة، والمادة لعرض التحليل الدقيق.
                         </p>
-                        
-                        <button 
-                            onClick={() => setShowStructuredAnalysis(true)}
-                            className="bg-white border border-indigo-200 text-indigo-600 px-6 py-3 rounded-xl hover:bg-indigo-50 transition-colors font-bold text-sm shadow-sm flex items-center gap-2"
-                        >
-                            <FileText size={18}/>
-                            أو افتح التقرير الشامل للمقاطعة الآن
-                        </button>
                     </div>
                 )}
             </div>

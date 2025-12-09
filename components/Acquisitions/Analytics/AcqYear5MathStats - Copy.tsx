@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { AcqClassRecord } from '../../../types/acquisitions';
 import { YEAR5_MATH_DEF } from '../../../constants/acqYear5Math';
@@ -5,9 +6,7 @@ import {
     BarChart3, Target, AlertTriangle, CheckCircle2, TrendingUp, LayoutGrid, Award, 
     School, Scale, Activity, X, Info, Calculator, BrainCircuit, Microscope, 
     Puzzle, Stethoscope, PenTool, BookOpen, Ruler, Zap, Maximize2, Minimize2, 
-    Edit, Save, RotateCcw, ChevronRight, Sigma, Filter, MessageSquare, Shapes,
-    Shield, TrendingDown, Users, Cpu, Sparkles, GitBranch,
-    Anchor, Brain, Crosshair, BarChart as BarChartIcon, Layers, Network
+    Edit, Save, RotateCcw, ChevronRight, Sigma, Filter, MessageSquare, Shapes
 } from 'lucide-react';
 import VoiceTextarea from '../../VoiceTextarea';
 
@@ -24,71 +23,37 @@ interface AnalysisContent {
     recommendation: string;
 }
 
-// تحسين تعريفات الدرجات
-const GRADE_DEFINITIONS = {
-    'A': { 
-        label: 'تحكم أقصى', 
-        score: 3, 
-        color: '#10b981',
-        description: 'يتقن المفهوم تماماً ويطبقه في سياقات معقدة'
-    },
-    'B': { 
-        label: 'تحكم مقبول', 
-        score: 2, 
-        color: '#3b82f6',
-        description: 'يتقن الأساسيات ويطبقها في سياقات مألوفة'
-    },
-    'C': { 
-        label: 'تحكم جزئي', 
-        score: 1, 
-        color: '#f59e0b',
-        description: 'يفهم الأساسيات لكن يخطئ في التطبيق'
-    },
-    'D': { 
-        label: 'تحكم محدود', 
-        score: 0, 
-        color: '#ef4444',
-        description: 'يواجه صعوبات كبيرة في الفهم والتطبيق'
-    }
-};
-
-// التعريفات الثابتة الأساسية فقط (بدون المؤشرات الجديدة)
-const METRIC_DEFINITIONS: Record<AnalysisSection, { title: string, concept: string, method: string, icon: React.ReactNode }> = {
+// Static Definitions for Focus Mode (Specific to Year 5 Math)
+const METRIC_DEFINITIONS: Record<AnalysisSection, { title: string, concept: string, method: string }> = {
     communication: {
         title: "مؤشر الفصاحة الرياضياتية (الأخرس الرياضياتي)",
         concept: "قياس قدرة التلميذ على التبرير، الشرح، واستخدام المصطلحات الدقيقة، وليس فقط الوصول للنتيجة الصامتة. هذا المعيار موجود الآن في نهاية كل كفاءة.",
-        method: "تجميع معدلات النجاح في معايير 'التبليغ' الأربعة (معيار 4 في العد، معيار 3 في الهندسة، معيار 3 في القياس، معيار 4 في البيانات).",
-        icon: <MessageSquare className="text-blue-500" size={20} />
+        method: "تجميع معدلات النجاح في معايير 'التبليغ' الأربعة (معيار 4 في العد، معيار 3 في الهندسة، معيار 3 في القياس، معيار 4 في البيانات)."
     },
     abstractTriangle: {
         title: "مثلث المفاهيم المجردة",
         concept: "تحليل الترابط المفاهيمي بين (الكسور - الأعداد العشرية - النسبة المئوية). هذه المفاهيم مترابطة، وأي خلل في أحدها يؤدي لانهيار البقية.",
-        method: "مقارنة نسب النجاح في: الكسور (ك1.م2)، الأعداد العشرية (ك1.م1)، والنسبة المئوية (ك4.م3).",
-        icon: <Shapes className="text-purple-500" size={20} />
+        method: "مقارنة نسب النجاح في: الكسور (ك1.م2)، الأعداد العشرية (ك1.م1)، والنسبة المئوية (ك4.م3)."
     },
     matrix: {
         title: "مصفوفة التوازن (آلية / منطق)",
         concept: "أداة تشخيصية تصنف التلاميذ حسب نمط تفكيرهم الرياضي: هل هم 'حاسبون آليون' أم 'مفكرون منطقيون'؟",
-        method: "تقاطع معدل التحكم في 'العمليات الأربع' (ك1.م3) مع معدل 'التناسبية' (ك4.م2).",
-        icon: <Puzzle className="text-teal-500" size={20} />
+        method: "تقاطع معدل التحكم في 'العمليات الأربع' (ك1.م3) مع معدل 'التناسبية' (ك4.م2)."
     },
     radar: {
         title: "توازن الميادين",
         concept: "نظرة شمولية لمدى نمو الكفاءات الأربع بشكل متوازٍ، وكشف الميادين المهملة (غالباً الهندسة أو القياس).",
-        method: "حساب معدل التحكم في كل ميدان (أعداد، هندسة، قياس، تنظيم معطيات) بشكل مستقل.",
-        icon: <Activity className="text-indigo-500" size={20} />
+        method: "حساب معدل التحكم في كل ميدان (أعداد، هندسة، قياس، تنظيم معطيات) بشكل مستقل."
     },
     illiteracy: {
         title: "مؤشر الهشاشة القاعدية",
         concept: "تحديد نسبة التلاميذ الذين يفتقدون للحد الأدنى من الأدوات الرياضية اللازمة للمتوسط.",
-        method: "حساب نسبة التلاميذ الذين حصلوا على تقدير (د) في 'العمليات الأربع' وفي 'المساحات والمحيطات' معاً.",
-        icon: <AlertTriangle className="text-red-500" size={20} />
+        method: "حساب نسبة التلاميذ الذين حصلوا على تقدير (د) في 'العمليات الأربع' وفي 'المساحات والمحيطات' معاً."
     },
     funnel: {
         title: "قمع التفكير الرياضي",
         concept: "تتبع مسار التلميذ عبر مستويات التعقيد: من الحساب البسيط -> الهندسة -> القياس -> حل المشكلات المعقدة (التناسبية).",
-        method: "تتبع عدد المتحكمين في كل مرحلة وتحديد نقطة الانكسار الكبرى.",
-        icon: <Filter className="text-pink-500" size={20} />
+        method: "تتبع عدد المتحكمين في كل مرحلة وتحديد نقطة الانكسار الكبرى."
     }
 };
 
@@ -96,6 +61,8 @@ const AcqYear5MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
     
     const [expandedSection, setExpandedSection] = useState<string | null>(null);
     const [hoveredData, setHoveredData] = useState<{ x: number, y: number, text: string, title?: string } | null>(null);
+    const [hoveredMatrixZone, setHoveredMatrixZone] = useState<string | null>(null);
+
     const [isEditMode, setIsEditMode] = useState(false);
     const [editingSection, setEditingSection] = useState<AnalysisSection | null>(null);
     const [customAnalysis, setCustomAnalysis] = useState<Record<string, AnalysisContent>>({});
@@ -127,28 +94,16 @@ const AcqYear5MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
 
     // --- 1. DATA PREPARATION ---
     const allStudents = useMemo(() => {
-        return records.flatMap(r => r.students.map(s => ({ 
-            ...s, 
-            className: r.className, 
-            schoolName: r.schoolName,
-            id: `${r.schoolName}-${r.className}-${s.fullName}` 
-        })));
+        return records.flatMap(r => r.students.map(s => ({ ...s, className: r.className, schoolName: r.schoolName })));
     }, [records]);
 
     const totalStudents = allStudents.length;
 
-    const getGrade = (student: any, compId: string, critId: number): string | null => {
+    const getGrade = (student: any, compId: string, critId: number) => {
         if (!student.results) return null;
         const comp = student.results[compId];
         if (!comp) return null;
-        const val = comp[critId] || comp[String(critId)];
-        return typeof val === 'string' ? val : null;
-    };
-
-    // دالة مساعدة جديدة: حساب درجة التلميذ في معيار معين
-    const getGradeScore = (grade: string | null) => {
-        if (!grade || !GRADE_DEFINITIONS[grade as keyof typeof GRADE_DEFINITIONS]) return 0;
-        return GRADE_DEFINITIONS[grade as keyof typeof GRADE_DEFINITIONS].score;
+        return comp[critId] || comp[String(critId)];
     };
 
     // --- 2. ADVANCED METRICS ---
@@ -157,15 +112,22 @@ const AcqYear5MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
     const commIndex = useMemo(() => {
         let score = 0, max = 0;
         allStudents.forEach(s => {
+            // "التبليغ" exists in all 4 competencies
+            // Comp 1 Crit 4
             const c1 = getGrade(s, 'control_numbers', 4);
+            // Comp 2 Crit 3
             const c2 = getGrade(s, 'geometry_space', 3);
+            // Comp 3 Crit 3
             const c3 = getGrade(s, 'measurements', 3);
+            // Comp 4 Crit 4
             const c4 = getGrade(s, 'data_org', 4);
 
             [c1, c2, c3, c4].forEach(g => {
                 if (g) {
                     max += 3;
-                    score += getGradeScore(g);
+                    if(g === 'A') score += 3;
+                    else if(g === 'B') score += 2;
+                    else if(g === 'C') score += 1;
                 }
             });
         });
@@ -179,42 +141,40 @@ const AcqYear5MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
         let percScore = 0, percMax = 0;
 
         allStudents.forEach(s => {
+            // Fractions: Comp 1 Crit 2
             const gFrac = getGrade(s, 'control_numbers', 2);
             if(gFrac) {
                 fracMax += 3;
-                fracScore += getGradeScore(gFrac);
+                if(gFrac === 'A') fracScore += 3; else if(gFrac === 'B') fracScore += 2; else if(gFrac === 'C') fracScore += 1;
             }
 
+            // Decimals: Comp 1 Crit 1
             const gDec = getGrade(s, 'control_numbers', 1);
             if(gDec) {
                 decMax += 3;
-                decScore += getGradeScore(gDec);
+                if(gDec === 'A') decScore += 3; else if(gDec === 'B') decScore += 2; else if(gDec === 'C') decScore += 1;
             }
 
+            // Percentages: Comp 4 Crit 3
             const gPerc = getGrade(s, 'data_org', 3);
             if(gPerc) {
                 percMax += 3;
-                percScore += getGradeScore(gPerc);
+                if(gPerc === 'A') percScore += 3; else if(gPerc === 'B') percScore += 2; else if(gPerc === 'C') percScore += 1;
             }
         });
-
-        // حساب اتساق المثلث
-        const scores = [fracScore, decScore, percScore];
-        const maxScore = Math.max(...scores);
-        const minScore = Math.min(...scores);
-        const consistency = maxScore > 0 ? 100 - ((maxScore - minScore) / maxScore * 100) : 0;
 
         return {
             fractions: fracMax > 0 ? (fracScore / fracMax) * 100 : 0,
             decimals: decMax > 0 ? (decScore / decMax) * 100 : 0,
-            percentages: percMax > 0 ? (percScore / percMax) * 100 : 0,
-            consistency: consistency
+            percentages: percMax > 0 ? (percScore / percMax) * 100 : 0
         };
     }, [allStudents]);
 
     // C. Critical Failure (Math Illiteracy)
     const criticalFailureRate = useMemo(() => {
         const failedStudents = allStudents.filter(s => {
+            // Fails basic calc (Comp 1 Crit 3: العمليات الأربع) 
+            // AND fails Geometry (Comp 3 Crit 1: المحيط والمساحة)
             const g_calc = getGrade(s, 'control_numbers', 3);
             const g_geom = getGrade(s, 'measurements', 1);
             return g_calc === 'D' && g_geom === 'D';
@@ -226,10 +186,10 @@ const AcqYear5MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
     // D. Radar Data (4 Domains)
     const radarData = useMemo(() => {
         const domains = [
-            { key: 'numbers', label: 'أعداد وحساب', compId: 'control_numbers', color: '#3b82f6' },
-            { key: 'geom', label: 'هندسة وفضاء', compId: 'geometry_space', color: '#8b5cf6' },
-            { key: 'measure', label: 'مقادير وقياس', compId: 'measurements', color: '#10b981' },
-            { key: 'data', label: 'تنظيم معطيات', compId: 'data_org', color: '#ec4899' },
+            { key: 'numbers', label: 'أعداد وحساب', compId: 'control_numbers' },
+            { key: 'geom', label: 'هندسة وفضاء', compId: 'geometry_space' },
+            { key: 'measure', label: 'مقادير وقياس', compId: 'measurements' },
+            { key: 'data', label: 'تنظيم معطيات', compId: 'data_org' },
         ];
         
         return domains.map(d => {
@@ -240,16 +200,13 @@ const AcqYear5MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
                     const g = getGrade(s, d.compId, crit.id);
                     if(g) {
                         max += 3;
-                        score += getGradeScore(g);
+                        if(g === 'A') score += 3;
+                        else if(g === 'B') score += 2;
+                        else if(g === 'C') score += 1;
                     }
                 });
             });
-            return { 
-                subject: d.label, 
-                A: max > 0 ? (score / max) * 100 : 0, 
-                fullMark: 100,
-                color: d.color
-            };
+            return { subject: d.label, A: max > 0 ? (score / max) * 100 : 0, fullMark: 100 };
         });
     }, [allStudents]);
 
@@ -257,21 +214,25 @@ const AcqYear5MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
     const funnelData = useMemo(() => {
         const total = totalStudents;
         
+        // Level 1: Basic Operations (Comp 1 Crit 3)
         const calcPass = allStudents.filter(s => {
             const g = getGrade(s, 'control_numbers', 3);
             return g === 'A' || g === 'B';
         }).length;
         
+        // Level 2: Area/Perimeter (Comp 3 Crit 1) -- Note: Moved to Measurement based on new update
         const measurePass = allStudents.filter(s => {
              const g = getGrade(s, 'measurements', 1); 
              return g === 'A' || g === 'B';
         }).length;
 
+        // Level 3: Fractions (Comp 1 Crit 2)
         const fractionPass = allStudents.filter(s => {
             const g = getGrade(s, 'control_numbers', 2); 
             return g === 'A' || g === 'B';
         }).length;
 
+        // Level 4: Proportionality (Comp 4 Crit 2)
         const propPass = allStudents.filter(s => {
             const g = getGrade(s, 'data_org', 2); 
             return g === 'A' || g === 'B';
@@ -289,19 +250,21 @@ const AcqYear5MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
     // F. Student Analysis for Matrix (Individual Scores)
     const studentScores = useMemo(() => {
         return allStudents.map(s => {
-            let opsScore = 0, opsMax = 0;
-            let propScore = 0, propMax = 0;
+            let opsScore = 0, opsMax = 0; // Operations
+            let propScore = 0, propMax = 0; // Proportionality
 
+            // Operations: Comp 1 Crit 3
             const gOps = getGrade(s, 'control_numbers', 3);
             if (gOps) {
                 opsMax += 3;
-                opsScore += getGradeScore(gOps);
+                if(gOps === 'A') opsScore += 3; else if(gOps === 'B') opsScore += 2; else if(gOps === 'C') opsScore += 1;
             }
 
+            // Proportionality: Comp 4 Crit 2
             const gProp = getGrade(s, 'data_org', 2);
             if (gProp) {
                 propMax += 3;
-                propScore += getGradeScore(gProp);
+                if(gProp === 'A') propScore += 3; else if(gProp === 'B') propScore += 2; else if(gProp === 'C') propScore += 1;
             }
 
             return { 
@@ -319,8 +282,8 @@ const AcqYear5MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
             const highProp = s.propPct >= 50;
             
             if (highOps && highProp) counts.balanced++;
-            else if (highOps && !highProp) counts.rote++;
-            else if (!highOps && highProp) counts.logic_error++;
+            else if (highOps && !highProp) counts.rote++; // High Calc, Low Prop
+            else if (!highOps && highProp) counts.logic_error++; // Low Calc, High Prop (Rare but possible)
             else counts.struggling++;
             
             counts.total++;
@@ -343,30 +306,22 @@ const AcqYear5MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
         
         if (section === 'abstractTriangle') {
             const { fractions, decimals, percentages } = abstractTriangle;
-            const avg = (fractions + decimals + percentages) / 3;
             return {
-                reading: `مثلث المفاهيم المجردة: الكسور (${fractions.toFixed(0)}%) ← الأعداد العشرية (${decimals.toFixed(0)}%) ← النسبة المئوية (${percentages.toFixed(0)}%).`,
+                reading: `مثلث المفاهيم المجردة: الكسور (${fractions.toFixed(0)}%) -> الأعداد العشرية (${decimals.toFixed(0)}%) -> النسبة المئوية (${percentages.toFixed(0)}%).`,
                 diagnosis: Math.abs(fractions - percentages) > 20
                     ? "انكسار في سلسلة التجريد. التلميذ لم يربط بين الكسر (1/2) والعدد العشري (0.5) والنسبة (50%). هو يتعامل معها كدروس منفصلة."
-                    : avg < 50
-                    ? "ضعف عام في المفاهيم المجردة مع محاولة للربط بينها."
                     : "ترابط مفاهيمي ممتاز. التلميذ يدرك أن هذه المفاهيم الثلاثة هي وجوه لعملة واحدة.",
                 recommendation: "استخدام 'اللوحة المئوية' و 'الأشرطة' لربط هذه المفاهيم بصرياً وحسياً."
             };
         }
 
         if (section === 'funnel') {
-            const start = funnelData[1].count;
-            const end = funnelData[4].count;
+            const start = funnelData[1].count; // Operations
+            const end = funnelData[4].count;   // Proportionality
             const dropRate = start > 0 ? ((start - end) / start * 100).toFixed(0) : 0;
-            const bottleneck = funnelData.slice(1).find((stage, i, arr) => 
-                i < arr.length - 1 && stage.count > arr[i + 1].count * 1.5
-            );
             return {
-                reading: `نسبة التسرب المعرفي بين 'الحساب' و 'التناسبية' هي ${dropRate}%. ${bottleneck ? `نقطة الاختناق الرئيسية: ${bottleneck.label}` : ''}`,
-                diagnosis: parseInt(dropRate as string) > 50 
-                    ? "الانتقال من التفكير الجمعي (العمليات) إلى التفكير التناسبي (الضربي) يشكل العائق الأكبر." 
-                    : "مسار التعلم سلس نسبياً، مع وجود صعوبات طبيعية في مراحل التقدم.",
+                reading: `نسبة التسرب المعرفي بين 'الحساب' و 'التناسبية' هي ${dropRate}%.`,
+                diagnosis: "الانتقال من التفكير الجمعي (العمليات) إلى التفكير التناسبي (الضربي) يشكل العائق الأكبر.",
                 recommendation: "التركيز على جداول التناسبية المستمدة من الواقع (المقادير والأسعار) لتنمية الحس التناسبي."
             };
         }
@@ -374,47 +329,34 @@ const AcqYear5MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
         if (section === 'matrix') {
             const total = performanceMatrix.total || 1;
             const q_rote = Math.round((performanceMatrix.rote / total) * 100);
-            const q_balanced = Math.round((performanceMatrix.balanced / total) * 100);
             return {
-                reading: `نسبة 'الحساب الآلي' هي ${q_rote}%، 'المتوازنون' ${q_balanced}%، 'المتعثرون' ${Math.round((performanceMatrix.struggling / total) * 100)}%، 'المنطقيون' ${Math.round((performanceMatrix.logic_error / total) * 100)}%.`,
+                reading: `نسبة 'الحساب الآلي' هي ${q_rote}%. هؤلاء تلاميذ يتقنون الجمع والضرب لكن يفشلون في التناسبية.`,
                 diagnosis: q_rote > 25 
                     ? "التعليم يركز على 'الإجراءات' (كيف أحسب) ويهمل 'المفاهيم' (متى أستعمل هذا الحساب). خطر حقيقي في المتوسط." 
-                    : q_balanced > 40
-                    ? "توازن مطمئن بين التحكم في الآلية وفهم المعنى."
-                    : "نسبة المتوازنين تحت المعدل المطلوب، مع تركيز على الجوانب الإجرائية.",
+                    : "توازن مطمئن بين التحكم في الآلية وفهم المعنى.",
                 recommendation: "تقليص التمارين الروتينية وتكثيف الوضعيات التي تتطلب اختيار العملية المناسبة."
             };
         }
 
         if (section === 'radar') {
             const weakDomain = radarData.reduce((prev, curr) => prev.A < curr.A ? prev : curr);
-            const strongDomain = radarData.reduce((prev, curr) => prev.A > curr.A ? prev : curr);
-            const balanceScore = 100 - (strongDomain.A - weakDomain.A);
             return {
-                reading: `الميدان الأضعف: "${weakDomain.subject}" (${weakDomain.A.toFixed(1)}%)، الأقوى: "${strongDomain.subject}" (${strongDomain.A.toFixed(1)}%). درجة التوازن: ${balanceScore.toFixed(0)}%.`,
-                diagnosis: balanceScore < 60 
-                    ? `اختلال كبير في بناء الكفاءة الرياضية الشاملة. ضعف ${weakDomain.subject} قد يعيق التقدم لاحقاً ويعكس إهمالاً لهذا المجال.`
-                    : balanceScore < 75
-                    ? `توازن مقبول مع وجود هامش للتحسين في ${weakDomain.subject}.`
-                    : "توازن ممتاز بين الميادين الأربعة.",
+                reading: `الميدان الأضعف هو "${weakDomain.subject}" بنسبة ${weakDomain.A.toFixed(1)}%.`,
+                diagnosis: `اختلال في بناء الكفاءة الرياضية الشاملة. ضعف ${weakDomain.subject} قد يعيق التقدم لاحقاً.`,
                 recommendation: `تخصيص أنشطة علاجية مكثفة في ${weakDomain.subject}.`
             };
         }
 
         if (section === 'illiteracy') {
             const isCritical = criticalFailureRate > 10;
-            const isWarning = criticalFailureRate > 5 && criticalFailureRate <= 10;
             return {
                 reading: `نسبة ${criticalFailureRate.toFixed(1)}% من التلاميذ يعانون من تعثر مزدوج (عمليات + مساحات).`,
                 diagnosis: isCritical
                     ? "مؤشر خطر. هؤلاء التلاميذ يفتقدون للحد الأدنى من الأدوات، مما يجعل انتقالهم للمتوسط مجازفة."
-                    : isWarning
-                    ? "نسبة تحذيرية. تحتاج متابعة عن كثب."
                     : "النسبة مقبولة وتعكس حالات فردية.",
                 recommendation: "المعالجة الفردية داخل القسم والتركيز على الأساسيات."
             };
         }
-
         return { reading: '', diagnosis: '', recommendation: '' };
     };
 
@@ -493,14 +435,16 @@ const AcqYear5MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
                 break;
             case 'abstractTriangle':
                  analysisIcon = <Shapes size={24} className="text-purple-500" />;
-                 const { fractions, decimals, percentages, consistency } = abstractTriangle;
+                 const { fractions, decimals, percentages } = abstractTriangle;
                  content = (
                     <div className="h-full flex items-center justify-center p-4 w-full">
                         <div className="relative w-[400px] h-[350px]">
+                            {/* Triangle Shape */}
                             <svg viewBox="0 0 400 350" className="w-full h-full overflow-visible">
                                 <path d="M200 50 L350 300 L50 300 Z" fill="none" stroke="#e2e8f0" strokeWidth="2" strokeDasharray="5 5"/>
                                 <path d="M200 50 L350 300 L50 300 Z" fill="rgba(168, 85, 247, 0.1)" stroke="none"/>
                                 
+                                {/* Vertices Circles */}
                                 <g className="group">
                                     <circle cx="200" cy="50" r={fractions/2.5} fill="#a855f7" opacity="0.8" className="transition-all duration-1000"/>
                                     <text x="200" y="30" textAnchor="middle" className="text-xs font-bold fill-slate-600">الكسور ({fractions.toFixed(0)}%)</text>
@@ -514,13 +458,10 @@ const AcqYear5MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
                                     <text x="50" y="330" textAnchor="middle" className="text-xs font-bold fill-slate-600">الأعداد العشرية ({decimals.toFixed(0)}%)</text>
                                 </g>
 
+                                {/* Connections - Strength indicated by opacity/width */}
                                 <line x1="200" y1="50" x2="350" y2="300" stroke="#a855f7" strokeWidth={Math.min(fractions, percentages)/20} opacity="0.5"/>
                                 <line x1="350" y1="300" x2="50" y2="300" stroke="#a855f7" strokeWidth={Math.min(percentages, decimals)/20} opacity="0.5"/>
                                 <line x1="50" y1="300" x2="200" y2="50" stroke="#a855f7" strokeWidth={Math.min(decimals, fractions)/20} opacity="0.5"/>
-                                
-                                <text x="200" y="200" textAnchor="middle" className="text-sm font-bold fill-slate-500">
-                                    اتساق المثلث: {consistency.toFixed(0)}%
-                                </text>
                             </svg>
                         </div>
                     </div>
@@ -531,20 +472,24 @@ const AcqYear5MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
                 content = (
                     <div className="h-full flex items-center justify-center w-full">
                         <div className="aspect-square w-[400px] relative bg-slate-700/30 rounded-2xl border border-slate-600 p-4 grid grid-cols-2 grid-rows-2 gap-2">
-                             <div className="bg-blue-500/20 rounded flex flex-col items-center justify-center border border-blue-500/30">
-                                <span className="text-2xl font-bold text-blue-400">{performanceMatrix.total > 0 ? Math.round((performanceMatrix.logic_error / performanceMatrix.total)*100) : 0}%</span>
+                             {/* Q1: Low Calc / High Prop */}
+                            <div className="bg-blue-500/20 rounded flex flex-col items-center justify-center border border-blue-500/30">
+                                <span className="text-2xl font-bold text-blue-400">{Math.round((performanceMatrix.logic_error / performanceMatrix.total)*100)}%</span>
                                 <span className="text-sm text-blue-300">منطق سليم / خطأ حسابي</span>
                             </div>
+                            {/* Q2: High Calc / High Prop */}
                             <div className="bg-emerald-500/20 rounded flex flex-col items-center justify-center border border-emerald-500/30">
-                                <span className="text-2xl font-bold text-emerald-400">{performanceMatrix.total > 0 ? Math.round((performanceMatrix.balanced / performanceMatrix.total)*100) : 0}%</span>
+                                <span className="text-2xl font-bold text-emerald-400">{Math.round((performanceMatrix.balanced / performanceMatrix.total)*100)}%</span>
                                 <span className="text-sm text-emerald-300">تحكم شامل</span>
                             </div>
+                            {/* Q3: Low Calc / Low Prop */}
                             <div className="bg-red-500/20 rounded flex flex-col items-center justify-center border border-red-500/30">
-                                <span className="text-2xl font-bold text-red-400">{performanceMatrix.total > 0 ? Math.round((performanceMatrix.struggling / performanceMatrix.total)*100) : 0}%</span>
+                                <span className="text-2xl font-bold text-red-400">{Math.round((performanceMatrix.struggling / performanceMatrix.total)*100)}%</span>
                                 <span className="text-sm text-red-300">تعثر شامل</span>
                             </div>
+                            {/* Q4: High Calc / Low Prop */}
                             <div className="bg-yellow-500/20 rounded flex flex-col items-center justify-center border border-yellow-500/30">
-                                <span className="text-2xl font-bold text-yellow-400">{performanceMatrix.total > 0 ? Math.round((performanceMatrix.rote / performanceMatrix.total)*100) : 0}%</span>
+                                <span className="text-2xl font-bold text-yellow-400">{Math.round((performanceMatrix.rote / performanceMatrix.total)*100)}%</span>
                                 <span className="text-sm text-yellow-300">حساب آلي (حفظ)</span>
                             </div>
                         </div>
@@ -582,7 +527,7 @@ const AcqYear5MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
                                             <text x={x} y={y} textAnchor="middle" dominantBaseline="middle" className="text-[8px] font-bold fill-slate-300 uppercase tracking-widest">
                                                 {d.subject}
                                             </text>
-                                            <text x={x} y={y + 8} textAnchor="middle" dominantBaseline="middle" className="text-[10px] font-bold" style={{ fill: d.color }}>
+                                            <text x={x} y={y + 8} textAnchor="middle" dominantBaseline="middle" className="text-[10px] font-bold fill-purple-400">
                                                 {d.A.toFixed(0)}%
                                             </text>
                                         </g>
@@ -723,39 +668,18 @@ const AcqYear5MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
                             تحليل الرياضيات (نهاية الطور)
                         </div>
                         <h2 className="text-3xl font-bold font-serif mb-2">{YEAR5_MATH_DEF.label}</h2>
-                        <p className="text-slate-300 text-sm flex items-center gap-2">
-                            <School size={16}/> {contextName} 
-                            <span className="mx-2">|</span> 
-                            <Users size={16}/> {totalStudents} تلميذ
-                            <span className="mx-2">|</span>
-                            <Zap size={16}/> تشخيص الأداء المنظومي
-                        </p>
-                    </div>
-                    <div className="flex gap-3">
-                        <div className="text-center bg-white/10 p-3 rounded-xl backdrop-blur-sm">
-                            <div className="text-2xl font-bold">{totalStudents}</div>
-                            <div className="text-xs text-slate-300">تلميذ</div>
-                        </div>
-                        <div className="text-center bg-white/10 p-3 rounded-xl backdrop-blur-sm">
-                            <div className="text-2xl font-bold">6</div>
-                            <div className="text-xs text-slate-300">مؤشر تحليل</div>
-                        </div>
+                        <p className="text-slate-300 text-sm flex items-center gap-2"><School size={16}/> {contextName} <span className="mx-2">|</span> <Zap size={16}/> تشخيص الأداء المنظومي</p>
                     </div>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 
-                {/* 1. COMMUNICATION INDEX */}
+                {/* 1. COMMUNICATION INDEX (NEW) */}
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-lg transition-all group relative" onClick={() => setExpandedSection('communication')}>
                     <ExpandBtn section="communication" />
                     <div className="flex justify-between items-start mb-6">
-                        <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                            {METRIC_DEFINITIONS.communication.icon} الفصاحة الرياضياتية
-                        </h3>
-                        <span className={`text-xs font-bold px-2 py-1 rounded-full ${commIndex >= 70 ? 'bg-emerald-100 text-emerald-800' : commIndex >= 50 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'}`}>
-                            {commIndex >= 70 ? 'ممتاز' : commIndex >= 50 ? 'مقبول' : 'ضعيف'}
-                        </span>
+                        <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2"><MessageSquare className="text-blue-600" size={20}/> الفصاحة الرياضياتية</h3>
                     </div>
                     <div className="flex items-center justify-center py-6">
                          <div className="relative w-48 h-24 bg-gray-100 rounded-t-full overflow-hidden">
@@ -769,40 +693,32 @@ const AcqYear5MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
                     </div>
                 </div>
 
-                {/* 2. ABSTRACT TRIANGLE */}
+                {/* 2. ABSTRACT TRIANGLE (NEW) */}
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-lg transition-all group relative" onClick={() => setExpandedSection('abstractTriangle')}>
                     <ExpandBtn section="abstractTriangle" />
                     <div className="flex justify-between items-start mb-6">
-                        <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                            {METRIC_DEFINITIONS.abstractTriangle.icon} مثلث المفاهيم المجردة
-                        </h3>
+                        <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2"><Shapes className="text-purple-600" size={20}/> مثلث المفاهيم المجردة</h3>
                     </div>
                     <div className="flex items-center justify-center py-2 h-40">
-                        <div className="relative">
-                            <svg viewBox="0 0 120 100" className="w-28 h-28 overflow-visible">
-                                <circle cx="60" cy="20" r="10" fill="#a855f7" className="animate-pulse"/>
-                                <circle cx="20" cy="80" r="10" fill="#3b82f6"/>
-                                <circle cx="100" cy="80" r="10" fill="#ec4899"/>
-                                <path d="M60 20 L20 80 L100 80 Z" fill="none" stroke="#cbd5e1" strokeWidth="2"/>
-                                <text x="60" y="15" textAnchor="middle" className="text-xs font-bold fill-purple-600">{abstractTriangle.fractions.toFixed(0)}%</text>
-                                <text x="15" y="85" textAnchor="middle" className="text-xs font-bold fill-blue-600">{abstractTriangle.decimals.toFixed(0)}%</text>
-                                <text x="100" y="85" textAnchor="middle" className="text-xs font-bold fill-pink-600">{abstractTriangle.percentages.toFixed(0)}%</text>
-                            </svg>
-                        </div>
+                        {/* Mini Triangle Preview */}
+                        <svg viewBox="0 0 100 100" className="w-24 h-24 overflow-visible">
+                            <circle cx="50" cy="10" r="8" fill="#a855f7" className="animate-pulse"/>
+                            <circle cx="10" cy="90" r="8" fill="#3b82f6"/>
+                            <circle cx="90" cy="90" r="8" fill="#ec4899"/>
+                            <path d="M50 10 L10 90 L90 90 Z" fill="none" stroke="#cbd5e1" strokeWidth="2"/>
+                        </svg>
                         <div className="mr-6 space-y-2 text-xs font-bold text-slate-500">
-                            <p><span className="text-purple-500">●</span> كسور: {abstractTriangle.fractions.toFixed(0)}%</p>
-                            <p><span className="text-blue-500">●</span> أعداد عشرية: {abstractTriangle.decimals.toFixed(0)}%</p>
-                            <p><span className="text-pink-500">●</span> نسبة مئوية: {abstractTriangle.percentages.toFixed(0)}%</p>
+                            <p><span className="text-purple-500">●</span> كسور</p>
+                            <p><span className="text-blue-500">●</span> أعداد عشرية</p>
+                            <p><span className="text-pink-500">●</span> نسبة مئوية</p>
                         </div>
                     </div>
                 </div>
 
-                {/* 3. RADAR */}
+                {/* 3. RADAR & ILLITERACY */}
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-lg transition-all group relative" onClick={() => setExpandedSection('radar')}>
                     <ExpandBtn section="radar" />
-                    <h3 className="font-bold text-lg text-slate-800 mb-6 flex items-center gap-2">
-                        {METRIC_DEFINITIONS.radar.icon} توازن الميادين الأربعة
-                    </h3>
+                    <h3 className="font-bold text-lg text-slate-800 mb-6 flex items-center gap-2"><Activity size={20} className="text-indigo-600"/> توازن الميادين الأربعة</h3>
                     <div className="flex justify-center py-4">
                         <div className="relative w-40 h-40">
                             <svg viewBox="0 0 200 200" className="w-full h-full overflow-visible">
@@ -810,87 +726,19 @@ const AcqYear5MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
                             </svg>
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-center mt-4">
-                        {radarData.slice(0, 2).map((d, i) => (
-                            <div key={i} className="text-xs">
-                                <div className="font-bold text-slate-600">{d.subject}</div>
-                                <div className="font-bold" style={{ color: d.color }}>{d.A.toFixed(0)}%</div>
-                            </div>
-                        ))}
-                    </div>
                 </div>
 
-                {/* 4. ILLITERACY */}
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-lg transition-all group relative" onClick={() => setExpandedSection('illiteracy')}>
                     <ExpandBtn section="illiteracy" />
-                    <h3 className="font-bold text-lg text-slate-800 mb-6 flex items-center gap-2">
-                        {METRIC_DEFINITIONS.illiteracy.icon} الهشاشة القاعدية
-                    </h3>
+                    <h3 className="font-bold text-lg text-slate-800 mb-6 flex items-center gap-2"><AlertTriangle size={20} className="text-red-500"/> الهشاشة القاعدية</h3>
                     <div className="text-center py-8">
-                        <div className={`text-5xl font-bold mb-2 ${criticalFailureRate > 10 ? 'text-red-500 animate-pulse' : criticalFailureRate > 5 ? 'text-amber-500' : 'text-emerald-500'}`}>
-                            {criticalFailureRate.toFixed(1)}%
-                        </div>
+                        <span className="text-5xl font-bold text-red-500">{criticalFailureRate.toFixed(1)}%</span>
                         <p className="text-slate-400 text-xs mt-2 font-bold uppercase">نسبة الخطر</p>
-                        {criticalFailureRate > 10 && (
-                            <div className="mt-3 text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full inline-block animate-pulse">
-                                ⚠️ يحتاج تدخل عاجل
-                            </div>
-                        )}
                     </div>
                 </div>
 
-                {/* 5. MATRIX */}
-                <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-lg transition-all group relative" onClick={() => setExpandedSection('matrix')}>
-                    <ExpandBtn section="matrix" />
-                    <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
-                        {METRIC_DEFINITIONS.matrix.icon} مصفوفة التوازن
-                    </h3>
-                    <div className="aspect-square grid grid-cols-2 gap-2">
-                        <div className="bg-blue-50 border border-blue-200 rounded p-2 text-center">
-                            <div className="text-xs text-blue-700">منطق سليم</div>
-                            <div className="text-xl font-bold text-blue-600">{performanceMatrix.total > 0 ? Math.round((performanceMatrix.logic_error / performanceMatrix.total)*100) : 0}%</div>
-                        </div>
-                        <div className="bg-emerald-50 border border-emerald-200 rounded p-2 text-center">
-                            <div className="text-xs text-emerald-700">تحكم شامل</div>
-                            <div className="text-xl font-bold text-emerald-600">{performanceMatrix.total > 0 ? Math.round((performanceMatrix.balanced / performanceMatrix.total)*100) : 0}%</div>
-                        </div>
-                        <div className="bg-red-50 border border-red-200 rounded p-2 text-center">
-                            <div className="text-xs text-red-700">تعثر شامل</div>
-                            <div className="text-xl font-bold text-red-600">{performanceMatrix.total > 0 ? Math.round((performanceMatrix.struggling / performanceMatrix.total)*100) : 0}%</div>
-                        </div>
-                        <div className="bg-yellow-50 border border-yellow-200 rounded p-2 text-center">
-                            <div className="text-xs text-yellow-700">حساب آلي</div>
-                            <div className="text-xl font-bold text-yellow-600">{performanceMatrix.total > 0 ? Math.round((performanceMatrix.rote / performanceMatrix.total)*100) : 0}%</div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* 6. FUNNEL */}
-                <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-lg transition-all group relative" onClick={() => setExpandedSection('funnel')}>
-                    <ExpandBtn section="funnel" />
-                    <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
-                        {METRIC_DEFINITIONS.funnel.icon} قمع التفكير الرياضي
-                    </h3>
-                    <div className="space-y-3">
-                        {funnelData.map((stage, i) => (
-                            <div key={i} className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <div className={`w-3 h-3 rounded-full ${stage.color}`}></div>
-                                    <span className="text-sm text-slate-600">{stage.label}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <div className="w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
-                                        <div className={`h-full ${stage.color}`} style={{ width: `${(stage.count / funnelData[0].count) * 100}%` }}></div>
-                                    </div>
-                                    <span className="text-sm font-bold text-slate-700">{stage.count}</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
             </div>
 
-            {/* لوحة التحكم السفلية */}
             <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
                  <button onClick={() => setIsEditMode(true)} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-8 py-4 rounded-2xl font-bold text-sm transition-all shadow-xl hover:shadow-2xl border-2 border-slate-700 hover:border-slate-600 hover:scale-105 group">
                     <Edit size={18} className="group-hover:rotate-12 transition-transform" />
@@ -907,30 +755,10 @@ const AcqYear5MathStats: React.FC<Props> = ({ records, scope, contextName }) => 
                         </div>
                         {!editingSection ? (
                             <div className="grid grid-cols-2 gap-4">
-                                <button onClick={() => setEditingSection('communication')} className="p-4 bg-slate-50 hover:bg-indigo-50 border rounded-xl font-bold text-slate-700 flex items-center gap-2">
-                                    {METRIC_DEFINITIONS.communication.icon}
-                                    <span>الفصاحة</span>
-                                </button>
-                                <button onClick={() => setEditingSection('abstractTriangle')} className="p-4 bg-slate-50 hover:bg-indigo-50 border rounded-xl font-bold text-slate-700 flex items-center gap-2">
-                                    {METRIC_DEFINITIONS.abstractTriangle.icon}
-                                    <span>المثلث المجرد</span>
-                                </button>
-                                <button onClick={() => setEditingSection('radar')} className="p-4 bg-slate-50 hover:bg-indigo-50 border rounded-xl font-bold text-slate-700 flex items-center gap-2">
-                                    {METRIC_DEFINITIONS.radar.icon}
-                                    <span>الرادار</span>
-                                </button>
-                                <button onClick={() => setEditingSection('illiteracy')} className="p-4 bg-slate-50 hover:bg-indigo-50 border rounded-xl font-bold text-slate-700 flex items-center gap-2">
-                                    {METRIC_DEFINITIONS.illiteracy.icon}
-                                    <span>الهشاشة</span>
-                                </button>
-                                <button onClick={() => setEditingSection('matrix')} className="p-4 bg-slate-50 hover:bg-indigo-50 border rounded-xl font-bold text-slate-700 flex items-center gap-2">
-                                    {METRIC_DEFINITIONS.matrix.icon}
-                                    <span>المصفوفة</span>
-                                </button>
-                                <button onClick={() => setEditingSection('funnel')} className="p-4 bg-slate-50 hover:bg-indigo-50 border rounded-xl font-bold text-slate-700 flex items-center gap-2">
-                                    {METRIC_DEFINITIONS.funnel.icon}
-                                    <span>القمع</span>
-                                </button>
+                                <button onClick={() => setEditingSection('communication')} className="p-4 bg-slate-50 hover:bg-indigo-50 border rounded-xl font-bold text-slate-700">الفصاحة</button>
+                                <button onClick={() => setEditingSection('abstractTriangle')} className="p-4 bg-slate-50 hover:bg-indigo-50 border rounded-xl font-bold text-slate-700">المثلث المجرد</button>
+                                <button onClick={() => setEditingSection('radar')} className="p-4 bg-slate-50 hover:bg-indigo-50 border rounded-xl font-bold text-slate-700">الرادار</button>
+                                <button onClick={() => setEditingSection('illiteracy')} className="p-4 bg-slate-50 hover:bg-indigo-50 border rounded-xl font-bold text-slate-700">الهشاشة</button>
                             </div>
                         ) : (
                              <EditAnalysisForm 
@@ -965,23 +793,14 @@ const EditAnalysisForm: React.FC<{
                  <button onClick={onClose} className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1"><ChevronRight size={12} className="rotate-180"/> عودة</button>
                  <span className="text-sm font-bold bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full">{getTitle()}</span>
              </div>
-             <div>
-                 <label className="block text-xs font-bold text-slate-700 mb-1">قراءة في البيانات</label>
-                 <VoiceTextarea value={formData.reading} onChange={(v) => setFormData({...formData, reading: v})} className="w-full border rounded-lg p-3 text-sm" minHeight="min-h-[100px]"/>
-             </div>
-             <div>
-                 <label className="block text-xs font-bold text-slate-700 mb-1">التشخيص البيداغوجي</label>
-                 <VoiceTextarea value={formData.diagnosis} onChange={(v) => setFormData({...formData, diagnosis: v})} className="w-full border rounded-lg p-3 text-sm bg-amber-50" minHeight="min-h-[100px]"/>
-             </div>
-             <div>
-                 <label className="block text-xs font-bold text-slate-700 mb-1">التوصية والقرار</label>
-                 <VoiceTextarea value={formData.recommendation} onChange={(v) => setFormData({...formData, recommendation: v})} className="w-full border rounded-lg p-3 text-sm bg-emerald-50" minHeight="min-h-[100px]"/>
-             </div>
+             <div><label className="block text-xs font-bold text-slate-700 mb-1">قراءة</label><VoiceTextarea value={formData.reading} onChange={(v) => setFormData({...formData, reading: v})} className="w-full border rounded-lg p-3 text-sm" minHeight="min-h-[100px]"/></div>
+             <div><label className="block text-xs font-bold text-slate-700 mb-1">تشخيص</label><VoiceTextarea value={formData.diagnosis} onChange={(v) => setFormData({...formData, diagnosis: v})} className="w-full border rounded-lg p-3 text-sm bg-amber-50" minHeight="min-h-[100px]"/></div>
+             <div><label className="block text-xs font-bold text-slate-700 mb-1">توصيات</label><VoiceTextarea value={formData.recommendation} onChange={(v) => setFormData({...formData, recommendation: v})} className="w-full border rounded-lg p-3 text-sm bg-emerald-50" minHeight="min-h-[100px]"/></div>
              <div className="flex justify-between pt-4 border-t">
-                 <button onClick={onReset} className="text-red-500 text-xs font-bold flex items-center gap-1 hover:underline"><RotateCcw size={12}/> استرجاع التحليل الافتراضي</button>
+                 <button onClick={onReset} className="text-red-500 text-xs font-bold flex items-center gap-1 hover:underline"><RotateCcw size={12}/> استرجاع</button>
                  <div className="flex gap-2">
                      <button onClick={onClose} className="px-4 py-2 text-slate-500 font-bold hover:bg-slate-100 rounded-lg">إلغاء</button>
-                     <button onClick={() => onSave(formData)} className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-md flex items-center gap-2"><Save size={16}/> حفظ التعديلات</button>
+                     <button onClick={() => onSave(formData)} className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-md flex items-center gap-2"><Save size={16}/> حفظ</button>
                  </div>
              </div>
         </div>
