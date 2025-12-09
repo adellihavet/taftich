@@ -243,10 +243,59 @@ export enum MessageRole {
   MODEL = 'model'
 }
 
+export enum Role {
+  USER = 'user',
+  MODEL = 'model',
+  SYSTEM = 'system'
+}
+
+export interface SystemConfig {
+  model: string;
+  temperature: number;
+  topK: number;
+  topP: number;
+  maxOutputTokens: number;
+  systemInstruction?: string;
+}
+
+export const AVAILABLE_MODELS = [
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
+  { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro' },
+];
+
+export interface Attachment {
+  id: string;
+  type: 'image' | 'file';
+  url: string;
+  name: string;
+  size?: number;
+  mimeType?: string;
+  data?: string;
+}
+
 export interface Message {
   role: MessageRole;
   text: string;
   isError?: boolean;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: Role | 'user' | 'model';
+  text: string;
+  content?: string;
+  timestamp: number;
+  isError?: boolean;
+  attachments?: Attachment[];
+}
+
+export interface FileNode {
+  id: string;
+  name: string;
+  type: 'file' | 'folder';
+  children?: FileNode[];
+  content?: string;
+  language?: string;
 }
 
 export enum AppView {
@@ -260,5 +309,6 @@ export enum AppView {
   QUARTERLY_REPORT = 'QUARTERLY_REPORT',
   ACQUISITIONS = 'ACQUISITIONS',
   SEMINARS = 'SEMINARS',
-  ADMIN_ASSISTANT = 'ADMIN_ASSISTANT'
+  ADMIN_ASSISTANT = 'ADMIN_ASSISTANT',
+  BRANDING = 'BRANDING'
 }

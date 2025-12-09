@@ -17,12 +17,13 @@ import TeacherDrawer from './components/TeacherDrawer';
 import AcqManager from './components/Acquisitions/AcqManager';
 import SeminarsManager from './components/SeminarsManager';
 import AdministrativeAssistant from './components/AdministrativeAssistant'; 
+import BrandingKit from './components/BrandingKit';
 import Auth from './components/Auth';
 import { supabase, isSupabaseConfigured, fetchScriptUrlFromCloud } from './services/supabaseService';
 import { Teacher, ReportData, TenureReportData, QuarterlyReportData, AppView, LibraryLink } from './types';
 import { AcqFilterState } from './types/acquisitions';
 import { MOCK_TEACHERS, INITIAL_REPORT_STATE, INITIAL_TENURE_REPORT_STATE, INITIAL_QUARTERLY_REPORT_STATE } from './constants';
-import { Database, LayoutDashboard, ArrowUpCircle, PenLine, LogOut, UserCircle2, Hexagon, PieChart, Cloud, RefreshCcw, AlertCircle, BarChart2, Presentation, Briefcase, Menu, X, Stamp, Users, List, BarChart3 } from 'lucide-react';
+import { Database, LayoutDashboard, ArrowUpCircle, PenLine, LogOut, UserCircle2, Hexagon, PieChart, Cloud, RefreshCcw, AlertCircle, BarChart2, Presentation, Briefcase, Menu, X, Stamp, Users, List, BarChart3, Image as ImageIcon } from 'lucide-react';
 import { syncWithScript, readFromScript } from './services/sheetsService';
 import { generateDatabaseRows, parseDatabaseRows } from './utils/sheetHelper';
 import { generateDatabaseRows as generateRows } from './utils/sheetHelper'; // Fallback import fix
@@ -711,6 +712,9 @@ const App: React.FC = () => {
                     <NavButton targetView={AppView.SEMINARS} icon={Presentation} label="الندوات التربوية" />
                     <NavButton targetView={AppView.ADMIN_ASSISTANT} icon={Briefcase} label="المساعد الإداري" />
                     <NavButton targetView={AppView.DATABASE} icon={Database} label="قاعدة البيانات" />
+                    
+                    {/* Branding Button */}
+                    <NavButton targetView={AppView.BRANDING} icon={ImageIcon} label="هوية المنصة" />
                 </div>
 
                 {/* Sync Status */}
@@ -968,6 +972,11 @@ const App: React.FC = () => {
                         district={derivedGlobalData.district}
                         signature={effectiveSignature} // Pass Signature
                     />
+                )}
+
+                {/* BRANDING KIT VIEW */}
+                {view === AppView.BRANDING && (
+                    <BrandingKit />
                 )}
             </div>
         </main>

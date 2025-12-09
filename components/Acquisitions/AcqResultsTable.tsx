@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { AcqClassRecord, AcqGlobalRecord, AcqGlobalStudent } from '../../types/acquisitions';
 import { YEAR2_ARABIC_DEF } from '../../constants/acqYear2Arabic';
