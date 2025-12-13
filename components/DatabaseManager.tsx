@@ -393,7 +393,7 @@ const DatabaseManager: React.FC<DatabaseManagerProps> = ({
                         <div className="flex items-start gap-3 mb-6">
                             <FileStack className="text-purple-500 mt-1" size={24}/>
                             <p className="text-sm text-gray-500">
-                                حفظ نسخة كاملة من النظام على جهاز الكمبيوتر (Backup) لاستعادتها لاحقاً في حالة عدم توفر الانترنت.
+                                حفظ نسخة كاملة من النظام على جهاز الكمبيوتر لاستعادتها في حالة <b>تعذر الاتصال بالسحابة</b> أو للعمل ببيانات منفصلة.
                             </p>
                         </div>
 
