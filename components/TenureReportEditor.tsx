@@ -1,6 +1,7 @@
+
 import React, { useState, useRef } from 'react';
 import { TenureReportData, Teacher, TenureLesson } from '../types';
-import { Save, Printer, User, BookOpen, MessageCircle, Gavel, Sparkles, ChevronDown, Stamp, Mic } from 'lucide-react';
+import { Save, Printer, User, BookOpen, MessageCircle, Gavel, Sparkles, ChevronDown, Stamp, Mic, Lock } from 'lucide-react';
 import VoiceTextarea from './VoiceTextarea';
 import VoiceInput from './VoiceInput';
 import { suggestImprovement } from '../services/geminiService';
@@ -12,9 +13,14 @@ interface TenureReportEditorProps {
     onPrint: () => void;
     isGoldMember: boolean;
     onUploadSignature?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    isExpired?: boolean;
+    onUpgradeClick?: () => void;
 }
 
-const TenureReportEditor: React.FC<TenureReportEditorProps> = ({ report, teacher, onChange, onPrint, isGoldMember, onUploadSignature }) => {
+const TenureReportEditor: React.FC<TenureReportEditorProps> = ({ 
+    report, teacher, onChange, onPrint, isGoldMember, onUploadSignature,
+    isExpired = false, onUpgradeClick
+}) => {
     const [activeTab, setActiveTab] = useState<'info' | 'lessons' | 'oral' | 'decision'>('info');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -38,10 +44,21 @@ const TenureReportEditor: React.FC<TenureReportEditorProps> = ({ report, teacher
     };
 
     const suggestOralQuestions = async () => {
-        if (!isGoldMember) return alert("هذه الخاصية للأعضاء الذهبيين");
+        // AI remains exclusive to Gold? Or open in Trial? The hook says isActive so it's open in trial.
+        if (!isGoldMember && isExpired) return onUpgradeClick && onUpgradeClick();
+        
+        // Mock suggestions for now
         updateOralField('legislation', "ما هي حقوق وواجبات الموظف العمومي؟");
         updateOralField('psychology', "كيف تتعامل مع التلميذ المشاغب بأسلوب تربوي؟");
         updateOralField('educationScience', "عرف الوساطة المدرسية ودورها في العملية التعليمية.");
+    };
+
+    const handlePrint = () => {
+        if (isExpired) {
+            onUpgradeClick && onUpgradeClick();
+        } else {
+            onPrint();
+        }
     };
 
     return (
@@ -64,7 +81,7 @@ const TenureReportEditor: React.FC<TenureReportEditorProps> = ({ report, teacher
                 </div>
                 
                 <div className="flex items-center gap-2">
-                     {onUploadSignature && (
+                     {onUploadSignature && !isExpired && (
                         <div className="relative">
                             <input 
                                 type="file" 
@@ -83,14 +100,24 @@ const TenureReportEditor: React.FC<TenureReportEditorProps> = ({ report, teacher
                         </div>
                     )}
 
-                    <button onClick={onPrint} className="flex items-center gap-2 bg-white text-[#4d6a4d] px-4 py-2 rounded-lg hover:bg-gray-100 font-bold shadow-sm">
-                        <Printer size={18} />
+                    <button 
+                        onClick={handlePrint} 
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold shadow-sm ${isExpired ? 'bg-gray-300 text-gray-600' : 'bg-white text-[#4d6a4d] hover:bg-gray-100'}`}
+                    >
+                        {isExpired ? <Lock size={18}/> : <Printer size={18} />}
                         طباعة
                     </button>
                 </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 max-w-4xl mx-auto w-full">
+                {/* Expired Warning Banner */}
+                {isExpired && (
+                    <div className="bg-red-500 text-white text-center py-2 px-4 rounded-lg mb-6 text-sm font-bold flex items-center justify-center gap-2 shadow-md">
+                        <Lock size={16} />
+                        <span>انتهت الفترة التجريبية. يمكنك التعديل لكن الطباعة تتطلب اشتراكاً.</span>
+                    </div>
+                )}
                 
                 {activeTab === 'info' && (
                     <div className="space-y-6 animate-in fade-in">
@@ -315,4 +342,4 @@ const TenureReportEditor: React.FC<TenureReportEditorProps> = ({ report, teacher
     );
 };
 
-export default TenureReportEditor
+export default TenureReportEditor;

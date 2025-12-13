@@ -1,10 +1,11 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Presentation, Printer, Users, FileText, CheckSquare, X, School, MapPin, CalendarDays, Plus, Trash2, Edit, Save, AlertCircle } from 'lucide-react';
+import { Presentation, Printer, Users, FileText, CheckSquare, X, School, MapPin, CalendarDays, Plus, Trash2, Edit, Save, AlertCircle, Lock } from 'lucide-react';
 import { Teacher, ReportData, SeminarEvent } from '../types';
 import VoiceInput from './VoiceInput';
 import VoiceTextarea from './VoiceTextarea';
+import ReadyMadeSeminars from './ReadyMadeSeminars'; // Import the new component
 
 interface SeminarsManagerProps {
     teachers: Teacher[];
@@ -15,6 +16,10 @@ interface SeminarsManagerProps {
         wilaya: string;
     };
     signature?: string;
+    isExpired?: boolean;
+    onUpgradeClick?: () => void;
+    initialTopic?: string | null;
+    onClearInitialTopic?: () => void;
 }
 
 const AVAILABLE_LEVELS = [
@@ -26,9 +31,12 @@ const AVAILABLE_LEVELS = [
     "السنة الخامسة"
 ];
 
-const SeminarsManager: React.FC<SeminarsManagerProps> = ({ teachers, reportsMap, inspectorInfo, signature }) => {
+const SeminarsManager: React.FC<SeminarsManagerProps> = ({ 
+    teachers, reportsMap, inspectorInfo, signature, isExpired = false, onUpgradeClick,
+    initialTopic, onClearInitialTopic
+}) => {
     // VIEW STATE
-    const [subView, setSubView] = useState<'attendance' | 'calendar'>('attendance');
+    const [subView, setSubView] = useState<'attendance' | 'calendar' | 'ready-made'>('attendance');
 
     // --- ATTENDANCE / INQUIRY STATE ---
     const [title, setTitle] = useState('');
@@ -39,15 +47,57 @@ const SeminarsManager: React.FC<SeminarsManagerProps> = ({ teachers, reportsMap,
     const [absentTeachers, setAbsentTeachers] = useState<string[]>([]);
     const [inquiryTarget, setInquiryTarget] = useState<Teacher | null>(null);
 
-    // --- CALENDAR STATE ---
+    // --- CALENDAR STATE (PERSISTENT) ---
     const [calendarTerm, setCalendarTerm] = useState('الثاني');
-    const [calendarRows, setCalendarRows] = useState<SeminarEvent[]>([
-        { id: '1', topic: 'يوم دراسي حول...', date: new Date().toISOString().split('T')[0], location: '', isExternalLocation: false, duration: '1/2 يوم', targetLevels: ['السنة الأولى', 'السنة الثانية'], supervisor: 'مفتش المقاطعة', notes: '' }
-    ]);
+    
+    // Initialize from LocalStorage or use default
+    const [calendarRows, setCalendarRows] = useState<SeminarEvent[]>(() => {
+        const saved = localStorage.getItem('mufattish_seminars_calendar');
+        if (saved) {
+            try {
+                return JSON.parse(saved);
+            } catch (e) {
+                console.error("Failed to parse saved seminars", e);
+            }
+        }
+        // Default initial state if nothing saved
+        return [
+            { id: '1', topic: 'يوم دراسي حول...', date: new Date().toISOString().split('T')[0], location: '', isExternalLocation: false, duration: '1/2 يوم', targetLevels: ['السنة الأولى', 'السنة الثانية'], supervisor: 'مفتش المقاطعة', notes: '' }
+        ];
+    });
+
+    // Save to LocalStorage whenever rows change
+    useEffect(() => {
+        localStorage.setItem('mufattish_seminars_calendar', JSON.stringify(calendarRows));
+    }, [calendarRows]);
     
     // Modal State for Add/Edit
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentEvent, setCurrentEvent] = useState<SeminarEvent | null>(null);
+
+    // --- HANDLE INCOMING TOPIC (from Dashboard) ---
+    useEffect(() => {
+        if (initialTopic) {
+            setSubView('calendar');
+            // Create a fresh event with the topic
+            const newEvent: SeminarEvent = {
+                id: Math.random().toString(36).substr(2, 9),
+                topic: initialTopic,
+                date: new Date().toISOString().split('T')[0],
+                location: '',
+                isExternalLocation: false,
+                duration: '1/2 يوم',
+                targetLevels: [],
+                supervisor: 'مفتش المقاطعة',
+                notes: ''
+            };
+            setCurrentEvent(newEvent);
+            setIsModalOpen(true);
+            
+            // Clear the topic in parent to avoid re-triggering
+            if (onClearInitialTopic) onClearInitialTopic();
+        }
+    }, [initialTopic, onClearInitialTopic]);
 
     // --- SHARED HELPERS ---
     const availableSchools = useMemo(() => {
@@ -151,31 +201,49 @@ const SeminarsManager: React.FC<SeminarsManagerProps> = ({ teachers, reportsMap,
     };
 
     const handlePrint = () => {
-        window.print();
+        if (isExpired) {
+            onUpgradeClick && onUpgradeClick();
+        } else {
+            window.print();
+        }
     };
 
     return (
         <div className="h-full flex flex-col bg-slate-50 relative">
             
             {/* SUB-NAVIGATION BAR */}
-            <div className="bg-white border-b px-6 py-2 flex items-center justify-between shadow-sm z-20">
+            <div className="bg-white border-b px-6 py-2 flex items-center justify-between shadow-sm z-20 overflow-x-auto no-scrollbar">
                 <div className="flex gap-2">
                     <button 
                         onClick={() => setSubView('attendance')}
-                        className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${subView === 'attendance' ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200' : 'text-slate-500 hover:bg-slate-100'}`}
+                        className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap ${subView === 'attendance' ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200' : 'text-slate-500 hover:bg-slate-100'}`}
                     >
                         <CheckSquare size={16} />
-                        إعداد الندوة (الحضور والاستفسار)
+                        إعداد الندوة (الحضور)
                     </button>
                     <button 
                         onClick={() => setSubView('calendar')}
-                        className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${subView === 'calendar' ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200' : 'text-slate-500 hover:bg-slate-100'}`}
+                        className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap ${subView === 'calendar' ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200' : 'text-slate-500 hover:bg-slate-100'}`}
                     >
                         <CalendarDays size={16} />
                         الرزنامة الفصلية
                     </button>
+                    <button 
+                        onClick={() => setSubView('ready-made')}
+                        className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap ${subView === 'ready-made' ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200' : 'text-slate-500 hover:bg-slate-100'}`}
+                    >
+                        <Presentation size={16} />
+                        عروض جاهزة
+                    </button>
                 </div>
             </div>
+
+            {/* ======================= READY MADE TOPICS VIEW ======================= */}
+            {subView === 'ready-made' && (
+                <div className="p-6 md:p-8 flex-1 overflow-y-auto print:hidden animate-in fade-in">
+                    <ReadyMadeSeminars inspectorInfo={inspectorInfo} />
+                </div>
+            )}
 
             {/* --- INQUIRY MODAL --- */}
             {inquiryTarget && subView === 'attendance' && (
@@ -202,8 +270,8 @@ const SeminarsManager: React.FC<SeminarsManagerProps> = ({ teachers, reportsMap,
                         </div>
                         <div className="p-4 bg-slate-50 border-t flex justify-end gap-2">
                             <button onClick={() => setInquiryTarget(null)} className="px-4 py-2 rounded text-slate-600 hover:bg-slate-200 font-bold">إلغاء</button>
-                            <button onClick={handlePrint} className="bg-red-600 text-white px-6 py-2 rounded shadow flex items-center gap-2 hover:bg-red-700 font-bold">
-                                <Printer size={18}/> طباعة الاستفسار
+                            <button onClick={handlePrint} className={`bg-red-600 text-white px-6 py-2 rounded shadow flex items-center gap-2 hover:bg-red-700 font-bold ${isExpired ? 'opacity-70' : ''}`}>
+                                {isExpired ? <Lock size={18}/> : <Printer size={18}/>} طباعة الاستفسار
                             </button>
                         </div>
                     </div>
@@ -400,7 +468,7 @@ const SeminarsManager: React.FC<SeminarsManagerProps> = ({ teachers, reportsMap,
                                         <span className="font-bold text-slate-700">القائمة الاسمية ({targetTeachers.length} أستاذ)</span>
                                     </div>
                                     <button onClick={handlePrint} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-indigo-700 flex items-center gap-2">
-                                        <Printer size={16}/> طباعة ورقة الحضور
+                                        {isExpired ? <Lock size={16}/> : <Printer size={16}/>} طباعة ورقة الحضور
                                     </button>
                                 </div>
                                 <table className="w-full text-right text-sm">
@@ -471,7 +539,7 @@ const SeminarsManager: React.FC<SeminarsManagerProps> = ({ teachers, reportsMap,
                                     </select>
                                 </div>
                                 <button onClick={handlePrint} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-indigo-700 flex items-center gap-2">
-                                    <Printer size={16}/> معاينة وطباعة
+                                    {isExpired ? <Lock size={16}/> : <Printer size={16}/>} معاينة وطباعة
                                 </button>
                             </div>
                         </div>
@@ -657,37 +725,26 @@ const SeminarsManager: React.FC<SeminarsManagerProps> = ({ teachers, reportsMap,
                 document.body
             )}
 
-            {/* 3. CALENDAR PRINT (New Landscape) */}
+            {/* 3. CALENDAR PRINT (Landscape) */}
             {subView === 'calendar' && createPortal(
                 <div className="hidden print:block fixed inset-0 bg-white z-[9999] overflow-visible text-black font-serif top-0 left-0 w-full h-full">
-                    {/* Inline Style to force Landscape specifically for this view */}
                     <style>{`@page { size: A4 landscape; margin: 0; }`}</style>
-                    
                     <div className="a4-page-landscape w-[297mm] h-[210mm] p-[10mm] mx-auto relative flex flex-col justify-between">
-                        
-                        {/* Header */}
                         <div className="w-full mb-4 relative">
-                            {/* Center: Republic & Ministry */}
                             <div className="text-center font-bold text-sm mb-4">
                                 <p>الجمهورية الجزائرية الديمقراطية الشعبية</p>
                                 <p>وزارة التربية الوطنية</p>
                             </div>
-                            
-                            {/* Right (Below): Directorate & Inspection */}
                             <div className="text-right font-bold text-xs pr-4">
                                 <p>مديرية التربية لولاية {inspectorInfo.wilaya}</p>
                                 <p>مفتشية التعليم الابتدائي - المقاطعة: {inspectorInfo.district}</p>
                             </div>
                         </div>
-
-                        {/* Oval Title */}
                         <div className="flex justify-center mb-6">
                             <div className="border-2 border-black rounded-[50%] px-16 py-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] bg-white text-center">
                                 <h1 className="text-xl font-bold font-serif tracking-wide">رزنامة العمليات التكوينية للفصل {calendarTerm}</h1>
                             </div>
                         </div>
-
-                        {/* Calendar Table */}
                         <div className="flex-1">
                             <table className="w-full border-collapse border border-black text-center text-sm">
                                 <thead>
@@ -725,22 +782,13 @@ const SeminarsManager: React.FC<SeminarsManagerProps> = ({ teachers, reportsMap,
                                 </tbody>
                             </table>
                         </div>
-
-                        {/* Footer */}
                         <div className="flex justify-end px-16 mt-4 pb-4">
                             <div className="text-center relative">
-                                <p className="font-bold text-xs mb-2">
-                                    حرر بـ: {inspectorInfo.wilaya} في: {new Date().toLocaleDateString('ar-DZ')}
-                                </p>
+                                <p className="font-bold text-xs mb-2">حرر بـ: {inspectorInfo.wilaya} في: {new Date().toLocaleDateString('ar-DZ')}</p>
                                 <p className="font-bold underline mb-16">مفتش التعليم الابتدائي</p>
-                                
                                 {signature && (
                                     <div className="absolute top-12 left-1/2 transform -translate-x-1/2 w-48 h-32 flex items-center justify-center">
-                                        <img 
-                                            src={signature} 
-                                            alt="Signature" 
-                                            className="w-full h-full object-contain mix-blend-multiply transform -rotate-6 scale-125" 
-                                        />
+                                        <img src={signature} alt="Signature" className="w-full h-full object-contain mix-blend-multiply transform -rotate-6 scale-125" />
                                     </div>
                                 )}
                             </div>

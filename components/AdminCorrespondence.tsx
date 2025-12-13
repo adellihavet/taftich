@@ -1,10 +1,11 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Printer, ArrowRight, Building2, School, FileText, Paperclip, Hash } from 'lucide-react';
+import { Printer, ArrowRight, Building2, School, FileText, Paperclip, Hash, Lock, History } from 'lucide-react';
 import { ReportData } from '../types';
 import VoiceInput from './VoiceInput';
 import VoiceTextarea from './VoiceTextarea';
+import { addMailRecord, getNextMailNumber } from '../services/mailStorage';
 
 interface AdminCorrespondenceProps {
     reportsMap: Record<string, ReportData>;
@@ -13,16 +14,23 @@ interface AdminCorrespondenceProps {
     district: string;
     onBack: () => void;
     signature?: string; // Added prop
+    isExpired?: boolean;
+    onUpgradeClick?: () => void;
 }
 
 const AdminCorrespondence: React.FC<AdminCorrespondenceProps> = ({ 
-    reportsMap, inspectorName, wilaya, district, onBack, signature
+    reportsMap, inspectorName, wilaya, district, onBack, signature,
+    isExpired = false, onUpgradeClick
 }) => {
     // --- STATE ---
     const [recipientMode, setRecipientMode] = useState<'school' | 'other'>('school');
     const [selectedSchool, setSelectedSchool] = useState<string>('');
     const [customRecipient, setCustomRecipient] = useState<string>('');
     
+    const [headerRefNumber, setHeaderRefNumber] = useState<string>(''); // For Header
+    const currentYear = new Date().getFullYear();
+    const [suggestedNum, setSuggestedNum] = useState<string>('');
+
     const [subject, setSubject] = useState<string>('');
     const [reference, setReference] = useState<string>('');
     const [attachments, setAttachments] = useState<string>('');
@@ -30,15 +38,34 @@ const AdminCorrespondence: React.FC<AdminCorrespondenceProps> = ({
         "يشرفني أن أوافيكم بـ..."
     );
 
+    // --- AUTO NUMBERING LOGIC ---
+    useEffect(() => {
+        const next = getNextMailNumber('outgoing', currentYear);
+        setSuggestedNum(next);
+        if (!headerRefNumber) {
+            setHeaderRefNumber(next);
+        }
+    }, [currentYear]);
+
     // --- DERIVED DATA ---
     const availableSchools = useMemo(() => {
         const schools = new Set<string>();
-        Object.values(reportsMap).forEach(r => { if(r.school) schools.add(r.school.trim()); });
+        Object.values(reportsMap).forEach((r: ReportData) => { if(r.school) schools.add(r.school.trim()); });
         return Array.from(schools).sort();
     }, [reportsMap]);
 
     const handlePrint = () => {
-        window.print();
+        if (isExpired && onUpgradeClick) {
+            onUpgradeClick();
+        } else {
+            window.print();
+            // Auto Archive
+            if (confirm("هل تريد حفظ المراسلة تلقائياً في سجل الصادر؟")) {
+                const recipient = recipientMode === 'school' ? `مدير(ة) مدرسة ${selectedSchool}` : customRecipient.split('\n')[0];
+                addMailRecord('outgoing', recipient, subject, false);
+                alert("تم الحفظ.");
+            }
+        }
     };
 
     const renderRecipientPreview = () => {
@@ -84,6 +111,7 @@ const AdminCorrespondence: React.FC<AdminCorrespondenceProps> = ({
                             <p>مديرية التربية لولاية {wilaya}</p>
                             <p>مفتشية التعليم الابتدائي</p>
                             <p>المقاطعة: {district}</p>
+                            <p className="mt-1">الرقم: <span className="font-mono text-sm">{headerRefNumber || '....'}</span> / {currentYear}</p>
                         </div>
                         <div className="text-left w-1/2">
                             <p>{wilaya} في: {new Date().toLocaleDateString('ar-DZ')}</p>
@@ -180,6 +208,20 @@ const AdminCorrespondence: React.FC<AdminCorrespondenceProps> = ({
 
                     <div className="space-y-4">
                         <label className="text-xs font-bold text-slate-500 uppercase block">2. بيانات المراسلة</label>
+                        <div className="space-y-1">
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="text-[10px] font-bold text-slate-400 flex items-center gap-1"><Hash size={10}/> رقم المراسلة (التسلسلي)</label>
+                                {suggestedNum && (
+                                    <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100 flex items-center gap-1">
+                                        <History size={8}/> التالي: {suggestedNum}
+                                    </span>
+                                )}
+                            </div>
+                            <VoiceInput value={headerRefNumber} onChange={setHeaderRefNumber} placeholder="مثلاً: 12" />
+                             {headerRefNumber !== suggestedNum && (
+                                <p className="text-[9px] text-amber-600 mt-1 text-right">تنبيه: الرقم المقترح بناءً على السجل هو {suggestedNum}</p>
+                             )}
+                        </div>
                         <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 flex items-center gap-1"><FileText size={10}/> الموضوع</label><VoiceInput value={subject} onChange={setSubject} placeholder="اكتب موضوع المراسلة..." /></div>
                         <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 flex items-center gap-1"><Hash size={10}/> المرجع (اختياري)</label><VoiceInput value={reference} onChange={setReference} placeholder="رقم / سنة..." /></div>
                         <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 flex items-center gap-1"><Paperclip size={10}/> المرفقات (اختياري)</label><VoiceInput value={attachments} onChange={setAttachments} placeholder="جداول، أقراص..." /></div>
@@ -191,7 +233,7 @@ const AdminCorrespondence: React.FC<AdminCorrespondenceProps> = ({
                     </div>
 
                     <button onClick={handlePrint} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 mt-auto">
-                        <Printer size={18} /> طباعة المراسلة
+                        {isExpired ? <Lock size={18} /> : <Printer size={18} />} طباعة المراسلة
                     </button>
                 </div>
             </div>

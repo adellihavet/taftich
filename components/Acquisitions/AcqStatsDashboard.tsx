@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { AcqClassRecord, AcqFilterState } from '../../types/acquisitions';
-import { BarChart2, PieChart, FileText } from 'lucide-react';
+import { BarChart2, PieChart, FileText, HelpCircle } from 'lucide-react';
 import AcqYear2ArabicStats from './Analytics/AcqYear2ArabicStats';
 import AcqYear2MathStats from './Analytics/AcqYear2MathStats';
 import AcqYear4ArabicStats from './Analytics/AcqYear4ArabicStats';
@@ -12,6 +12,7 @@ import AcqYear5IslamicStats from './Analytics/AcqYear5IslamicStats';
 import AcqYear5HistoryStats from './Analytics/AcqYear5HistoryStats';
 import AcqYear5CivicsStats from './Analytics/AcqYear5CivicsStats';
 import AcqTeacherProfile from './Analytics/AcqTeacherProfile';
+import AcqGuideModal from './AcqGuideModal';
 
 interface AcqStatsDashboardProps {
     records: AcqClassRecord[];
@@ -21,6 +22,7 @@ interface AcqStatsDashboardProps {
 
 const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters }) => {
     const { scope, selectedSchool, selectedLevel, selectedClass, selectedSubject } = filters;
+    const [showGuide, setShowGuide] = useState(false);
 
     const filteredRecords = useMemo(() => {
         return records.filter(r => {
@@ -55,13 +57,22 @@ const AcqStatsDashboard: React.FC<AcqStatsDashboardProps> = ({ records, filters 
     }, [scope, selectedSchool, selectedLevel, selectedClass, selectedSubject]);
 
     return (
-        <div className="flex flex-col h-full bg-slate-50/50">
+        <div className="flex flex-col h-full bg-slate-50/50 relative">
             
+            {showGuide && <AcqGuideModal onClose={() => setShowGuide(false)} />}
+
             <div className="bg-white p-4 border-b flex justify-between items-center shadow-sm shrink-0">
                 <div className="text-sm text-slate-500">
                     <span className="font-bold text-slate-700">النطاق الحالي:</span> {scope === 'district' ? 'المقاطعة' : scope === 'school' ? selectedSchool : `${selectedSchool} / ${selectedClass}`}
                 </div>
-                {/* Button removed as requested */}
+                
+                <button 
+                    onClick={() => setShowGuide(true)}
+                    className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors border border-indigo-200"
+                >
+                    <HelpCircle size={16}/>
+                    دليل قراءة المؤشرات
+                </button>
             </div>
 
             <div className="flex-1 p-6 md:p-8 overflow-y-auto">

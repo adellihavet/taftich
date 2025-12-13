@@ -1,27 +1,42 @@
 
 import React, { useMemo, useState } from 'react';
 import { Teacher, ReportData } from '../types';
-import { Users, School, GraduationCap, TrendingUp, CheckCircle2, Award, Radar, Trophy, TrendingDown, AlertTriangle, BookOpen, Briefcase, Zap, GitCompare, MonitorSmartphone, ShieldCheck, PenTool, ChevronLeft, Building2, MapPin, Target, LayoutList, LayoutGrid, FileText, PieChart, BarChart3, CheckSquare, Calendar, Lightbulb, ClipboardList } from 'lucide-react';
+import { Users, School, GraduationCap, TrendingUp, CheckCircle2, Award, Radar, Trophy, TrendingDown, AlertTriangle, BookOpen, Briefcase, Zap, GitCompare, MonitorSmartphone, ShieldCheck, PenTool, ChevronLeft, Building2, MapPin, Target, LayoutList, LayoutGrid, FileText, PieChart, BarChart3, CheckSquare, Calendar, Lightbulb, ClipboardList, Presentation, ScrollText, PenLine } from 'lucide-react';
+import { SEMINAR_SUGGESTIONS } from '../modernConstants';
+import { LEGACY_SEMINAR_SUGGESTIONS } from '../legacyConstants';
 
 interface DashboardStatsProps {
     teachers: Teacher[];
     reportsMap: Record<string, ReportData>;
     onNavigateToPromotions?: () => void;
     fullTeacherCount?: number; 
-    selectedSchool?: string; 
+    selectedSchool?: string;
+    onProgramSeminar?: (topic: string) => void; // New Callback
 }
 
-const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, onNavigateToPromotions, fullTeacherCount, selectedSchool }) => {
+const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, onNavigateToPromotions, fullTeacherCount, selectedSchool, onProgramSeminar }) => {
     const [statsView, setStatsView] = useState<'modern' | 'legacy'>('modern');
     const currentYear = new Date().getFullYear();
 
     // --- Calculations (Global) ---
 
-    const totalTeachers = teachers.length;
+    // Total Teacher Count (Registered)
+    const totalTeachers = fullTeacherCount || teachers.length;
     
+    // Visited Teachers (Coverage)
+    const visitedTeachersCount = useMemo(() => {
+        return teachers.filter(t => {
+            const r = reportsMap[t.id];
+            // Consider visited if there's a date and mark, or if imported with date
+            return r && r.inspectionDate && r.inspectionDate.trim() !== '';
+        }).length;
+    }, [teachers, reportsMap]);
+
+    const coverageRate = totalTeachers > 0 ? (visitedTeachersCount / totalTeachers) * 100 : 0;
+
     // Average Mark
     const avgMark = useMemo(() => {
-        if (totalTeachers === 0) return 0;
+        if (totalTeachers === 0) return "0";
         const sum = teachers.reduce((acc, t) => acc + (t.lastMark || 0), 0);
         return (sum / totalTeachers).toFixed(2);
     }, [teachers]);
@@ -46,108 +61,105 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
         return counts;
     }, [teachers]);
 
-    // --- LEGACY SPECIFIC STATS & SUGGESTIONS ---
-    const legacyAnalysis = useMemo(() => {
-        const stats = {
-            count: 0,
-            preparation: { good: 0, medium: 0, weak: 0 },
-            objectives: { full: 0, partial: 0, none: 0 },
-            registers: { monitored: 0, notMonitored: 0 },
-            board: { organized: 0, random: 0 },
-            notebooks: { good: 0, medium: 0, bad: 0 },
-            
-            // New Counters for Training Suggestions
-            weakPreparationCount: 0,
-            weakRegistersCount: 0,
-            weakNotebooksCount: 0,
-            weakObjectivesCount: 0,
-            badBoardWorkCount: 0,
-            weakProgressionCount: 0
-        };
-
-        Object.values(reportsMap).forEach((r: ReportData) => {
-            // Apply filtering logic if needed (teacher present in current list)
-            if (!teachers.some(t => t.id === r.teacherId)) return;
-
-            if (r.reportModel === 'legacy' && r.legacyData) {
-                stats.count++;
-                const d = r.legacyData;
-
-                // Prep
-                if (d.preparationValue === 'جيدة' || d.preparationValue.includes('جيدة')) stats.preparation.good++;
-                else if (d.preparationValue === 'متوسطة' || d.preparationValue === 'مقبولة') stats.preparation.medium++;
-                else {
-                    stats.preparation.weak++;
-                    stats.weakPreparationCount++;
-                }
-
-                // Objectives
-                if (d.objectivesAchieved === 'تحققت كلياً') stats.objectives.full++;
-                else if (d.objectivesAchieved.includes('جزئياً') || d.objectivesAchieved.includes('نسبياً')) stats.objectives.partial++;
-                else {
-                    stats.objectives.none++;
-                    stats.weakObjectivesCount++;
-                }
-
-                // Registers
-                if (d.registersMonitored?.includes('نعم')) stats.registers.monitored++;
-                else {
-                    stats.registers.notMonitored++;
-                    stats.weakRegistersCount++;
-                }
-
-                // Board
-                if (d.boardWork?.includes('منظمة')) stats.board.organized++;
-                else {
-                    stats.board.random++;
-                    stats.badBoardWorkCount++;
-                }
-
-                // Notebooks
-                if (d.notebooksCare === 'حسنة' || d.notebooksCare.includes('حسنة')) stats.notebooks.good++;
-                else if (d.notebooksCare === 'متوسطة' || d.notebooksCare === 'مقبولة') stats.notebooks.medium++;
-                else {
-                    stats.notebooks.bad++;
-                    stats.weakNotebooksCount++;
-                }
-
-                // Progression (For suggestion)
-                if (d.progression && (d.progression.includes('غير') || d.progression.includes('متأخر'))) {
-                    stats.weakProgressionCount++;
-                }
+    // --- SCHOOL RANKING (Global) ---
+    const schoolRankings = useMemo(() => {
+        const schoolStats: Record<string, { totalMark: number, count: number }> = {};
+        
+        teachers.forEach(t => {
+            const r = reportsMap[t.id];
+            if (r && r.school && r.finalMark) {
+                const name = r.school.trim();
+                if (!schoolStats[name]) schoolStats[name] = { totalMark: 0, count: 0 };
+                schoolStats[name].totalMark += r.finalMark;
+                schoolStats[name].count += 1;
             }
         });
 
-        // Generate Suggestions based on thresholds
-        const suggestions: { title: string, priority: string, count: number }[] = [];
-        const threshold = Math.max(1, Math.round(stats.count * 0.2)); // 20% of cases trigger a suggestion
+        const sorted = Object.entries(schoolStats).map(([name, stat]) => ({
+            name,
+            avg: stat.totalMark / stat.count,
+            count: stat.count
+        })).sort((a, b) => b.avg - a.avg);
 
-        if (stats.weakPreparationCount >= threshold) suggestions.push({ title: 'فنيات إعداد المذكرة التربوية', priority: 'عالية', count: stats.weakPreparationCount });
-        if (stats.weakObjectivesCount >= threshold) suggestions.push({ title: 'صياغة الأهداف الإجرائية وقياسها', priority: 'عالية', count: stats.weakObjectivesCount });
-        if (stats.badBoardWorkCount >= threshold) suggestions.push({ title: 'تقنيات استغلال السبورة وتنظيمها', priority: 'متوسطة', count: stats.badBoardWorkCount });
-        if (stats.weakNotebooksCount >= threshold) suggestions.push({ title: 'أهمية العناية بدفاتر المتعلمين وتصحيحها', priority: 'منخفضة', count: stats.weakNotebooksCount });
-        if (stats.weakRegistersCount >= threshold) suggestions.push({ title: 'مسك السجلات والوثائق الرسمية', priority: 'متوسطة', count: stats.weakRegistersCount });
-        if (stats.weakProgressionCount >= threshold) suggestions.push({ title: 'التخطيط وبناء التدرجات السنوية', priority: 'عالية', count: stats.weakProgressionCount });
+        return {
+            top3: sorted.slice(0, 3),
+            bottom3: sorted.slice(-3).reverse(), // Reverse to show lowest first in the "Need Support" list
+            total: sorted.length
+        };
+    }, [teachers, reportsMap]);
 
-        return { stats, suggestions };
-    }, [reportsMap, teachers]);
+
+    // --- PROMOTION CANDIDATES COUNT (Fixed Logic) ---
+    const promotionCount = useMemo(() => {
+        // Retrieve settings from LocalStorage to match PromotionList logic
+        const enableBonification = localStorage.getItem('mufattish_promo_bonus_enabled') === 'true';
+        const bonusMonths = parseInt(localStorage.getItem('mufattish_promo_bonus_months') || '3');
+        const campaignYear = new Date().getFullYear();
+
+        return teachers.filter(t => {
+            // 1. Basic Eligibility
+            if (t.status !== 'titulaire' || !t.echelonDate || !t.echelon) return false;
+            
+            const currentEchelon = parseInt(t.echelon);
+            // RULE: Max Echelon is 12
+            if (currentEchelon >= 12) return false;
+
+            const echelonDate = new Date(t.echelonDate);
+            if (isNaN(echelonDate.getTime())) return false;
+
+            // --- CALCULATION LOGIC ---
+            let requiredRealMonths = 30; // Standard 2.5 years
+
+            if (enableBonification) {
+                const accelerationRatio = (12 + bonusMonths) / 12;
+                requiredRealMonths = 30 / accelerationRatio;
+            }
+
+            // Calculate eligibility date
+            const eligibilityDate = new Date(echelonDate);
+            const daysToAdd = requiredRealMonths * 30.44; 
+            eligibilityDate.setDate(eligibilityDate.getDate() + daysToAdd);
+            
+            const cutOffDate = new Date(campaignYear, 11, 31);
+
+            // Condition 1: Time
+            if (eligibilityDate > cutOffDate) return false;
+
+            // Condition 2: Mark Ceiling
+            const maxAllowedMark = 13 + (currentEchelon * 0.5);
+            if (t.lastMark >= maxAllowedMark) return false;
+
+            // Condition 3: Already Visited
+            const activeReport = reportsMap[t.id];
+            if (activeReport) {
+                const isDateFilled = activeReport.inspectionDate && activeReport.inspectionDate.trim() !== '';
+                const isMarkFilled = activeReport.finalMark !== undefined && activeReport.finalMark > 0;
+                if (isDateFilled && isMarkFilled) return false; 
+            }
+
+            return true;
+        }).length;
+    }, [teachers, reportsMap]);
 
 
     // --- MODERN SPECIFIC STATS ---
 
-    // Students by Level (Fixed: Summing actual student counts)
+    // Students by Level (Fixed: Summing actual student counts from ALL reports)
     const studentsByLevel = useMemo(() => {
         const levels: Record<string, number> = {};
-        teachers.forEach(t => {
-            const r = reportsMap[t.id];
-            // Filter by current list context
-            if (r && r.level) {
+        
+        // Use all available reports to get student counts, even if not visited this year
+        Object.values(reportsMap).forEach(r => {
+             // Basic check to ensure it belongs to a teacher in current context if filtered
+             if (selectedSchool && r.school !== selectedSchool) return;
+
+             if (r.level) {
                 const lvl = r.level.trim();
-                // Ensure we use the actual number from the report, default to 0 if not set
                 const count = r.studentCount || 0; 
                 levels[lvl] = (levels[lvl] || 0) + count;
-            }
+             }
         });
+
         const sortOrder = ['التربية التحضيرية', 'السنة الأولى', 'السنة الثانية', 'السنة الثالثة', 'السنة الرابعة', 'السنة الخامسة'];
         return Object.entries(levels)
             .map(([name, count]) => ({ name, count }))
@@ -156,74 +168,34 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
                 const idxB = sortOrder.indexOf(b.name);
                 return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB);
             });
-    }, [teachers, reportsMap]);
+    }, [reportsMap, selectedSchool]);
     
-    const maxStudentCount = useMemo(() => {
-        return Math.max(...studentsByLevel.map(s => s.count), 1);
-    }, [studentsByLevel]);
+    const totalStudentsSum = useMemo(() => studentsByLevel.reduce((acc, curr) => acc + curr.count, 0), [studentsByLevel]);
 
-    // Teachers by Degree
-    const teachersByDegree = useMemo(() => {
-        const degrees: Record<string, number> = {};
-        teachers.forEach(t => {
-            const d = t.degree || 'غير محدد';
-            degrees[d] = (degrees[d] || 0) + 1;
-        });
-        return Object.entries(degrees)
-            .map(([name, count]) => ({ name, count }))
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 6);
-    }, [teachers]);
-    
-    const maxDegreeCount = useMemo(() => {
-        return Math.max(...teachersByDegree.map(t => t.count), 1);
-    }, [teachersByDegree]);
-
-    // Seniority Pyramid
-    const seniorityPyramid = useMemo(() => {
-        const groups = [
-            { label: 'أقل من 5 سنوات (جدد)', min: 0, max: 5, count: 0, color: 'bg-blue-400' },
-            { label: '5 - 15 سنة (خبرة)', min: 5, max: 15, count: 0, color: 'bg-indigo-500' },
-            { label: '15 - 25 سنة (تمكّن)', min: 15, max: 25, count: 0, color: 'bg-purple-500' },
-            { label: '+25 سنة (خبراء)', min: 25, max: 100, count: 0, color: 'bg-amber-500' },
-        ];
-
-        teachers.forEach(t => {
-            if(t.recruitmentDate) {
-                const start = new Date(t.recruitmentDate);
-                const years = (new Date().getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
-                const group = groups.find(g => years >= g.min && years < g.max);
-                if(group) group.count++;
-            }
-        });
-        return groups;
-    }, [teachers]);
-
-    // Comparative Analysis (Expanded to 5 Criteria)
+    // Comparative Analysis (Modern: ID-based)
     const comparativeAnalysis = useMemo(() => {
-        const juniors = { count: 0, tech: 0, control: 0, pedagogy: 0, planning: 0, evaluation: 0 };
-        const seniors = { count: 0, tech: 0, control: 0, pedagogy: 0, planning: 0, evaluation: 0 };
+        const juniors = { count: 0, tech: 0, control: 0, planning: 0 };
+        const seniors = { count: 0, tech: 0, control: 0, planning: 0 };
         
-        const techCats = ['التكنولوجيا', 'الوسائل', 'استراتيجيات التعلم'];
-        const controlCats = ['النظام', 'الحركة', 'التعليمات', 'ضبط الصف'];
-        const pedagogyCats = ['الموارد المعرفية', 'الوضعية التعلمية'];
-        const planningCats = ['التخطيط', 'المخطط السنوي', 'الأهداف والوتيرة'];
-        const evaluationCats = ['التقويم', 'التقويم التكويني', 'استغلال النتائج'];
+        // IDs Mapping based on DEFAULT_OBSERVATION_TEMPLATE
+        const techIds = ['env-phy-3']; // التكنولوجيا
+        const controlIds = ['env-disc-1', 'env-disc-2']; // النظام، الحركة
+        const planningIds = ['plan-1', 'plan-4']; // المخطط السنوي، الأهداف
 
         teachers.forEach(t => {
             const report = reportsMap[t.id];
-            if (!report || !t.recruitmentDate || report.reportModel === 'legacy') return; // Only Modern reports
+            if (!report || !t.recruitmentDate || report.reportModel === 'legacy') return;
 
             const start = new Date(t.recruitmentDate);
             const years = (new Date().getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
             const isJunior = years <= 10;
             const target = isJunior ? juniors : seniors;
 
-            const getDomainScore = (categories: string[]) => {
+            const getDomainScore = (ids: string[]) => {
                 let sum = 0;
                 let max = 0;
                 report.observations.forEach(obs => {
-                    if (categories.some(c => obs.category.includes(c) || obs.criteria.includes(c))) {
+                    if (ids.includes(obs.id)) {
                         if (obs.score !== null) {
                             sum += obs.score;
                             max += 2;
@@ -234,20 +206,16 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
             };
 
             target.count++;
-            target.tech += getDomainScore(techCats);
-            target.control += getDomainScore(controlCats);
-            target.pedagogy += getDomainScore(pedagogyCats);
-            target.planning += getDomainScore(planningCats);
-            target.evaluation += getDomainScore(evaluationCats);
+            target.tech += getDomainScore(techIds);
+            target.control += getDomainScore(controlIds);
+            target.planning += getDomainScore(planningIds);
         });
 
         const normalize = (target: typeof juniors) => {
             if (target.count === 0) return;
             target.tech /= target.count;
             target.control /= target.count;
-            target.pedagogy /= target.count;
             target.planning /= target.count;
-            target.evaluation /= target.count;
         };
 
         normalize(juniors);
@@ -256,27 +224,42 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
         return { juniors, seniors };
     }, [teachers, reportsMap]);
 
-    // Marks Distribution (5 Ranges)
-    const marksDistribution = useMemo(() => {
-        const ranges = [
-            { label: 'دون المتوسط', min: 0, max: 9.99, count: 0, color: 'bg-red-400' },
-            { label: 'متوسط', min: 10, max: 11.99, count: 0, color: 'bg-orange-400' },
-            { label: 'جيد', min: 12, max: 13.99, count: 0, color: 'bg-yellow-400' },
-            { label: 'جيد جداً', min: 14, max: 15.99, count: 0, color: 'bg-blue-400' },
-            { label: 'ممتاز', min: 16, max: 20, count: 0, color: 'bg-emerald-500' },
-        ];
+    // Weakest Criteria & Training Suggestions (Modern)
+    const trainingPlan = useMemo(() => {
+        const stats: Record<string, { sum: number; count: number; category: string }> = {};
 
         teachers.forEach(t => {
-            const m = t.lastMark || 0;
-            const range = ranges.find(r => m >= r.min && m <= r.max);
-            if (range) range.count++;
+            const report = reportsMap[t.id];
+            if(report && report.reportModel !== 'legacy') {
+                report.observations.forEach(obs => {
+                    if (obs.score !== null) {
+                        if (!stats[obs.criteria]) {
+                            stats[obs.criteria] = { sum: 0, count: 0, category: obs.category };
+                        }
+                        stats[obs.criteria].sum += obs.score;
+                        stats[obs.criteria].count += 1;
+                    }
+                });
+            }
         });
 
-        const maxCount = Math.max(...ranges.map(r => r.count)) || 1; 
-        return { ranges, maxCount };
-    }, [teachers]);
+        const weakest = Object.entries(stats)
+            .map(([name, data]) => ({
+                name,
+                category: data.category,
+                avg: (data.sum / data.count / 2) * 100
+            }))
+            .sort((a, b) => a.avg - b.avg)
+            .slice(0, 5);
 
-    // Radar Chart Data
+        return weakest.map(item => {
+            const suggestions = SEMINAR_SUGGESTIONS[item.category] || ["ورشة تكوينية عامة في " + item.category];
+            const title = suggestions[0]; 
+            return { ...item, suggestedTitle: title };
+        });
+    }, [teachers, reportsMap]);
+
+    // Radar Chart Data (Modern)
     const radarData = useMemo(() => {
         const domains = [
             'التخطيط', 'التنفيذ', 'التقويم', 
@@ -317,571 +300,523 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
         });
     }, [teachers, reportsMap]);
 
-    // Weakest Criteria
-    const weakestCriteria = useMemo(() => {
-        const stats: Record<string, { sum: number; count: number; category: string }> = {};
+
+    // --- LEGACY SPECIFIC STATS ---
+
+    const legacyStats = useMemo(() => {
+        let totalLegacyReports = 0;
+        
+        // Metrics
+        const preparation = { excellent: 0, good: 0, weak: 0 };
+        const objectives = { full: 0, partial: 0, none: 0 };
+        const notebooks = { good: 0, average: 0, bad: 0 };
+        
+        // Weakness Tracking for Hybrid Suggestions
+        const weaknesses = {
+            planning: 0, // From Preparation
+            methodology: 0, // From Objectives & Execution
+            evaluation: 0, // From Notebooks Correction
+            environment: 0 // From Board/Cleanliness
+        };
 
         teachers.forEach(t => {
-            const report = reportsMap[t.id];
-            if(report && report.reportModel !== 'legacy') {
-                report.observations.forEach(obs => {
-                    if (obs.score !== null) {
-                        if (!stats[obs.criteria]) {
-                            stats[obs.criteria] = { sum: 0, count: 0, category: obs.category };
-                        }
-                        stats[obs.criteria].sum += obs.score;
-                        stats[obs.criteria].count += 1;
-                    }
-                });
+            const r = reportsMap[t.id];
+            if (r && r.reportModel === 'legacy' && r.legacyData) {
+                totalLegacyReports++;
+                const ld = r.legacyData;
+
+                // 1. Preparation Analysis
+                if (ld.preparationValue.includes('ممتازة') || ld.preparationValue.includes('جيدة')) preparation.good++;
+                else if (ld.preparationValue.includes('ضعيفة') || ld.preparationValue.includes('منعدم')) {
+                    preparation.weak++;
+                    weaknesses.planning++;
+                } else preparation.excellent++; 
+
+                // 2. Objectives Analysis
+                if (ld.objectivesAchieved.includes('كلياً')) objectives.full++;
+                else if (ld.objectivesAchieved.includes('جزئياً')) objectives.partial++;
+                else {
+                    objectives.none++;
+                    weaknesses.methodology++;
+                }
+
+                // 3. Notebooks Analysis
+                if (ld.notebooksCare.includes('حسنة')) notebooks.good++;
+                else if (ld.notebooksCare.includes('سيئة') || ld.notebooksCare.includes('مهملة')) {
+                    notebooks.bad++;
+                    weaknesses.evaluation++;
+                } else notebooks.average++;
+
+                // 4. Other Weakness Triggers
+                if (ld.boardWork.includes('عشوائية') || ld.cleanliness.includes('ناقصة')) weaknesses.environment++;
             }
         });
 
-        return Object.entries(stats)
-            .map(([name, data]) => ({
-                name,
-                category: data.category,
-                avg: (data.sum / data.count / 2) * 100
-            }))
-            .sort((a, b) => a.avg - b.avg)
-            .slice(0, 5);
+        // Generate Recommendations based on Legacy Data using CONSTANTS
+        const recommendations = [];
+        const threshold = 1; // Lower threshold to show suggestions even with few reports
+
+        if (weaknesses.planning >= threshold) {
+            // Get random suggestion or first one
+            const title = LEGACY_SEMINAR_SUGGESTIONS['التخطيط'][0];
+            recommendations.push({ title, count: weaknesses.planning, type: 'التخطيط' });
+        }
+        if (weaknesses.methodology >= threshold) {
+            const title = LEGACY_SEMINAR_SUGGESTIONS['التنفيذ'][0];
+            recommendations.push({ title, count: weaknesses.methodology, type: 'التنفيذ' });
+        }
+        if (weaknesses.evaluation >= threshold) {
+             const title = LEGACY_SEMINAR_SUGGESTIONS['التقويم'][0];
+             recommendations.push({ title, count: weaknesses.evaluation, type: 'التقويم' });
+        }
+        if (weaknesses.environment >= threshold) {
+             const title = LEGACY_SEMINAR_SUGGESTIONS['بيئة الصف'][0];
+             recommendations.push({ title, count: weaknesses.environment, type: 'بيئة الصف' });
+        }
+
+        return { 
+            total: totalLegacyReports, 
+            preparation, 
+            objectives, 
+            notebooks, 
+            recommendations: recommendations.sort((a,b) => b.count - a.count)
+        };
     }, [teachers, reportsMap]);
 
-    // School Ranking
-    const schoolContextData = useMemo(() => {
-        const schoolStats: Record<string, { totalMark: number, count: number }> = {};
-        Object.values(reportsMap).forEach((r: ReportData) => {
-            if (r.school && r.finalMark) {
-                const name = r.school.trim();
-                if (!schoolStats[name]) schoolStats[name] = { totalMark: 0, count: 0 };
-                schoolStats[name].totalMark += r.finalMark;
-                schoolStats[name].count += 1;
-            }
-        });
-        return Object.entries(schoolStats).map(([name, stat]) => ({
-            name,
-            avg: stat.totalMark / stat.count,
-            count: stat.count
-        })).sort((a, b) => b.avg - a.avg);
-    }, [reportsMap]);
-
-    const selectedSchoolRank = useMemo(() => {
-        if (!selectedSchool) return null;
-        const index = schoolContextData.findIndex(s => s.name === selectedSchool);
-        if (index === -1) return null;
-        return {
-            rank: index + 1,
-            total: schoolContextData.length,
-            data: schoolContextData[index]
-        };
-    }, [selectedSchool, schoolContextData]);
-
-    // Promotion Candidates
-    const promotionCandidateCount = useMemo(() => {
-        return teachers.filter(t => {
-            if (t.status !== 'titulaire' || !t.echelonDate || !t.echelon) return false;
-            const echelonDate = new Date(t.echelonDate);
-            if (isNaN(echelonDate.getTime())) return false;
-            const twoYearsMark = new Date(echelonDate);
-            twoYearsMark.setFullYear(echelonDate.getFullYear() + 2);
-            const cutOffDate = new Date(currentYear, 11, 31);
-            if (twoYearsMark > cutOffDate) return false;
-            const currentEchelon = parseInt(t.echelon);
-            const maxAllowedMark = 13 + (currentEchelon * 0.5);
-            if (t.lastMark >= maxAllowedMark) return false;
-
-            const activeReport = reportsMap[t.id];
-            if (activeReport) {
-                const isDateFilled = activeReport.inspectionDate && activeReport.inspectionDate.trim() !== '';
-                const isMarkFilled = activeReport.finalMark !== undefined && activeReport.finalMark > 0;
-                if (isDateFilled && isMarkFilled) return false;
-            }
-
-            return true;
-        }).length;
-    }, [teachers, currentYear, reportsMap]);
-
-    // Pie Chart Gradient
-    const totalStatus = totalTeachers || 1;
-    const p1 = (statusCounts.titulaire / totalStatus) * 100;
-    const p2 = p1 + (statusCounts.contractuel / totalStatus) * 100;
-    const pieGradient = `conic-gradient(#10b981 0% ${p1}%, #f97316 ${p1}% ${p2}%, #3b82f6 ${p2}% 100%)`;
-
-    // Helper for Radar Path
-    const generateRadarPath = (data: { value: number }[]) => {
-        if (data.length === 0) return '';
-        const totalPoints = data.length;
-        const radius = 80;
-        const centerX = 100;
-        const centerY = 100;
-        return data.map((point, i) => {
-            const angle = (Math.PI * 2 * i) / totalPoints - Math.PI / 2;
-            const value = Math.max(point.value, 10);
-            const x = centerX + (radius * (value / 100)) * Math.cos(angle);
-            const y = centerY + (radius * (value / 100)) * Math.sin(angle);
-            return `${x},${y}`;
-        }).join(' ');
-    };
+    
+    // --- Helper Components ---
+    const CoverageWidget = () => (
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 relative overflow-hidden group hover:shadow-md transition-shadow">
+            <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>
+            <div className="flex justify-between items-start mb-4">
+                <div>
+                    <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">نسبة تغطية المقاطعة</p>
+                    <h3 className="text-3xl font-bold text-slate-800">{visitedTeachersCount} <span className="text-sm text-slate-400 font-medium">/ {totalTeachers}</span></h3>
+                </div>
+                <div className="relative w-16 h-16">
+                    <svg className="w-full h-full transform -rotate-90">
+                        <circle cx="32" cy="32" r="28" fill="none" stroke="#e2e8f0" strokeWidth="6" />
+                        <circle cx="32" cy="32" r="28" fill="none" stroke="#3b82f6" strokeWidth="6" 
+                            strokeDasharray={`${(coverageRate * 175) / 100} 175`} 
+                            strokeLinecap="round" 
+                        />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-blue-600">
+                        {coverageRate.toFixed(0)}%
+                    </div>
+                </div>
+            </div>
+            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                 <div className="h-full bg-blue-500 rounded-full transition-all duration-1000" style={{ width: `${coverageRate}%` }}></div>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-2 text-right">عدد الزيارات المنجزة مقارنة بالعدد الكلي</p>
+        </div>
+    );
 
     return (
         <div className="p-4 md:p-8 h-full overflow-y-auto bg-gray-50/50">
-            {/* Header / Filter Bar - Compact */}
-            <div className="flex flex-col md:flex-row justify-between items-center mb-6 pb-2 border-b border-gray-200 gap-4">
+            {/* Header / Filter Bar */}
+            <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
                 <div className="flex items-center gap-4 w-full md:w-auto">
-                    {/* View Switcher */}
                     <div className="bg-white p-1 rounded-xl border border-gray-200 shadow-sm flex w-full md:w-auto">
                         <button 
                             onClick={() => setStatsView('modern')}
-                            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${statsView === 'modern' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+                            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${statsView === 'modern' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
                         >
                             <LayoutGrid size={16} />
-                            تحليل المعايير (حديث)
+                            المقاربة الحديثة
                         </button>
                         <button 
                             onClick={() => setStatsView('legacy')}
-                            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${statsView === 'legacy' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+                            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${statsView === 'legacy' ? 'bg-amber-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
                         >
-                            <LayoutList size={16} />
-                            تحليل الكلاسيكي (قديم)
+                            <ScrollText size={16} />
+                            النموذج الكلاسيكي
                         </button>
                     </div>
                 </div>
 
                 {selectedSchool && (
-                    <div className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-sm animate-in fade-in">
+                    <div className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-sm animate-in fade-in border border-indigo-100">
                         <School size={16} />
-                        تقرير خاص بمدرسة: {selectedSchool}
+                        تقرير مدرسة: {selectedSchool}
                     </div>
                 )}
             </div>
             
-            {/* School Scorecard */}
-            {selectedSchool && selectedSchoolRank && (
-                <div className="bg-gradient-to-r from-blue-900 to-indigo-800 rounded-2xl shadow-xl p-6 text-white mb-8 animate-in zoom-in-95 duration-500 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-4 opacity-10">
-                        <Building2 size={150} />
+            {/* 1. Global KPIs Row (Common) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <CoverageWidget />
+                
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow">
+                    <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">تعداد التلاميذ (المسجلين)</p>
+                    <div className="flex items-end gap-2">
+                        <span className="text-3xl font-bold text-slate-800">{totalStudentsSum}</span>
+                        <span className="text-sm text-slate-400 mb-1">تلميذ</span>
                     </div>
-                    <div className="flex flex-col md:flex-row gap-8 relative z-10">
-                        <div className="flex-1 border-l border-white/20 pl-6">
-                            <h2 className="text-2xl font-bold font-serif mb-2">{selectedSchool}</h2>
-                            <div className="flex items-center gap-2 opacity-80 mb-4">
-                                <MapPin size={16} />
-                                <span className="text-sm">بطاقة الأداء والمردودية</span>
+                    <div className="mt-4 flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded w-fit">
+                        <TrendingUp size={12}/>
+                        <span>إحصاء شامل</span>
+                    </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow">
+                    <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">متوسط النقاط</p>
+                    <div className="flex items-end gap-2">
+                        <span className="text-3xl font-bold text-indigo-600">{avgMark}</span>
+                        <span className="text-sm text-slate-400 mb-1">/ 20</span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-1.5 mt-4 overflow-hidden">
+                        <div className={`h-full rounded-full ${parseFloat(avgMark) >= 15 ? 'bg-emerald-500' : parseFloat(avgMark) >= 12 ? 'bg-indigo-500' : 'bg-orange-500'}`} style={{ width: `${(parseFloat(avgMark) / 20) * 100}%` }}></div>
+                    </div>
+                </div>
+
+                <div onClick={onNavigateToPromotions} className="bg-gradient-to-br from-indigo-600 to-blue-700 p-6 rounded-2xl shadow-lg shadow-indigo-200 text-white cursor-pointer hover:scale-[1.02] transition-transform relative overflow-hidden group">
+                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Zap size={80}/></div>
+                     <p className="text-indigo-100 text-xs font-bold uppercase tracking-wider mb-2">المعنيون بالترقية</p>
+                     <div className="flex items-end gap-2 relative z-10">
+                        <span className="text-4xl font-bold">{promotionCount}</span>
+                        <span className="text-sm text-indigo-200 mb-1">حالة</span>
+                     </div>
+                     <div className="mt-4 flex items-center gap-1 text-[10px] font-bold bg-white/20 w-fit px-2 py-1 rounded backdrop-blur-sm">
+                         <span>اضغط للتفاصيل</span>
+                         <ChevronLeft size={10}/>
+                     </div>
+                </div>
+            </div>
+
+            {/* VIEW: LEGACY ANALYTICS */}
+            {statsView === 'legacy' && (
+                <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+                    
+                    <div className="flex items-center gap-2 mb-2 text-amber-700 font-bold bg-amber-50 px-4 py-2 rounded-lg w-fit border border-amber-100">
+                        <ScrollText size={18} />
+                        <span>تحليل بيانات النموذج الكلاسيكي ({legacyStats.total} تقرير)</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        
+                        {/* 1. Preparation Quality */}
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
+                            <div className="flex justify-between items-start mb-4">
+                                <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                                    <PenLine className="text-blue-500" size={20} />
+                                    جودة الإعداد الكتابي
+                                </h3>
                             </div>
-                            <div className="flex gap-4">
-                                <div className="bg-white/10 rounded-lg p-3 text-center min-w-[80px]">
-                                    <span className="block text-2xl font-bold text-yellow-400">{selectedSchoolRank.data.avg.toFixed(2)}</span>
-                                    <span className="text-[10px] uppercase opacity-70">متوسط النقاط</span>
+                            <div className="space-y-4">
+                                <div>
+                                    <div className="flex justify-between text-xs font-bold mb-1"><span className="text-slate-600">إعداد جيد/ممتاز</span><span className="text-emerald-600">{legacyStats.preparation.good + legacyStats.preparation.excellent}</span></div>
+                                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-emerald-500" style={{ width: `${(legacyStats.total > 0 ? ((legacyStats.preparation.good + legacyStats.preparation.excellent)/legacyStats.total)*100 : 0)}%` }}></div></div>
                                 </div>
-                                <div className="bg-white/10 rounded-lg p-3 text-center min-w-[80px]">
-                                    <span className="block text-2xl font-bold">{selectedSchoolRank.data.count}</span>
-                                    <span className="text-[10px] uppercase opacity-70">عدد الأساتذة</span>
+                                <div>
+                                    <div className="flex justify-between text-xs font-bold mb-1"><span className="text-slate-600">إعداد ضعيف/منعدم</span><span className="text-red-600">{legacyStats.preparation.weak}</span></div>
+                                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-red-500" style={{ width: `${(legacyStats.total > 0 ? (legacyStats.preparation.weak/legacyStats.total)*100 : 0)}%` }}></div></div>
+                                </div>
+                            </div>
+                            <p className="text-[10px] text-slate-400 mt-4">بناءً على حقل "قيمة الإعداد"</p>
+                        </div>
+
+                        {/* 2. Objectives Achievement */}
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                            <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2 mb-6">
+                                <Target className="text-amber-500" size={20} />
+                                تحقيق الأهداف
+                            </h3>
+                            <div className="flex items-center justify-center gap-6">
+                                <div className="text-center">
+                                    <div className="w-16 h-16 rounded-full border-4 border-emerald-500 flex items-center justify-center text-xl font-bold text-emerald-700 bg-emerald-50 mb-2">
+                                        {legacyStats.total > 0 ? Math.round((legacyStats.objectives.full / legacyStats.total) * 100) : 0}%
+                                    </div>
+                                    <span className="text-xs font-bold text-slate-500">تحقق كلي</span>
+                                </div>
+                                <div className="text-center">
+                                    <div className="w-16 h-16 rounded-full border-4 border-orange-400 flex items-center justify-center text-xl font-bold text-orange-700 bg-orange-50 mb-2">
+                                        {legacyStats.total > 0 ? Math.round((legacyStats.objectives.partial / legacyStats.total) * 100) : 0}%
+                                    </div>
+                                    <span className="text-xs font-bold text-slate-500">تحقق جزئي</span>
+                                </div>
+                                <div className="text-center">
+                                    <div className="w-16 h-16 rounded-full border-4 border-red-400 flex items-center justify-center text-xl font-bold text-red-700 bg-red-50 mb-2">
+                                        {legacyStats.total > 0 ? Math.round((legacyStats.objectives.none / legacyStats.total) * 100) : 0}%
+                                    </div>
+                                    <span className="text-xs font-bold text-slate-500">لم يتحقق</span>
                                 </div>
                             </div>
                         </div>
-                        <div className="flex items-center gap-4 border-l border-white/20 pl-6">
-                            <div className="text-center">
-                                <p className="text-xs uppercase opacity-70 mb-1">الترتيب المقاطعي</p>
-                                <div className="flex items-baseline gap-1 justify-center">
-                                    <span className="text-4xl font-bold">{selectedSchoolRank.rank}</span>
-                                    <span className="text-sm opacity-60">/ {selectedSchoolRank.total}</span>
+
+                        {/* 3. Notebooks Care */}
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                            <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2 mb-4">
+                                <BookOpen className="text-purple-500" size={20} />
+                                العناية بالدفاتر
+                            </h3>
+                            <div className="flex flex-col gap-2">
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xs font-bold w-12 text-slate-500">حسنة</span>
+                                    <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
+                                        <div className="h-full bg-purple-500" style={{ width: `${(legacyStats.total > 0 ? (legacyStats.notebooks.good / legacyStats.total) * 100 : 0)}%` }}></div>
+                                    </div>
+                                    <span className="text-xs font-bold text-purple-600">{legacyStats.notebooks.good}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xs font-bold w-12 text-slate-500">متوسطة</span>
+                                    <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
+                                        <div className="h-full bg-purple-300" style={{ width: `${(legacyStats.total > 0 ? (legacyStats.notebooks.average / legacyStats.total) * 100 : 0)}%` }}></div>
+                                    </div>
+                                    <span className="text-xs font-bold text-purple-400">{legacyStats.notebooks.average}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xs font-bold w-12 text-slate-500">سيئة</span>
+                                    <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
+                                        <div className="h-full bg-red-400" style={{ width: `${(legacyStats.total > 0 ? (legacyStats.notebooks.bad / legacyStats.total) * 100 : 0)}%` }}></div>
+                                    </div>
+                                    <span className="text-xs font-bold text-red-500">{legacyStats.notebooks.bad}</span>
                                 </div>
                             </div>
-                            <div className={`w-16 h-16 rounded-full flex items-center justify-center border-4 ${selectedSchoolRank.rank === 1 ? 'border-yellow-400 text-yellow-400' : selectedSchoolRank.rank <= 3 ? 'border-gray-300 text-gray-300' : 'border-indigo-400 text-indigo-300'}`}>
-                                <Trophy size={32} />
-                            </div>
                         </div>
-                        <div className="flex-1 flex flex-col justify-center">
-                            <p className="text-sm italic opacity-90 mb-2">
-                                "{selectedSchoolRank.rank === 1 ? 'أداء ممتاز! هذه المدرسة تقود المقاطعة.' : selectedSchoolRank.rank > selectedSchoolRank.total / 2 ? 'تحتاج إلى مرافقة بيداغوجية مكثفة لرفع المستوى.' : 'أداء متوسط، يمكن تحسينه بالتركيز على التكوين.'}"
-                            </p>
-                            <div className="w-full bg-black/20 rounded-full h-2 mt-2">
-                                <div 
-                                    className={`h-2 rounded-full ${selectedSchoolRank.rank === 1 ? 'bg-yellow-400' : 'bg-blue-400'}`} 
-                                    style={{ width: `${(selectedSchoolRank.data.avg / 20) * 100}%` }}
-                                ></div>
-                            </div>
-                            <span className="text-[10px] mt-1 text-right opacity-60">مؤشر الجودة العامة</span>
+                    </div>
+                    
+                    {/* HYBRID INTELLIGENCE: Recommendations from Legacy Data */}
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 relative overflow-hidden">
+                         <div className="absolute top-0 right-0 w-1.5 h-full bg-amber-500"></div>
+                         <div className="flex justify-between items-center mb-6">
+                            <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                                <Presentation className="text-amber-600" size={20} />
+                                خطة التكوين المقترحة (تحليل هجين)
+                            </h3>
+                            <span className="text-[10px] bg-amber-50 text-amber-800 px-2 py-1 rounded border border-amber-200">مبني على نقائص الكلاسيكي</span>
+                        </div>
+                        
+                        <div className="space-y-3">
+                            {legacyStats.recommendations.length > 0 ? legacyStats.recommendations.map((rec, i) => (
+                                <div key={i} className="flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100 hover:border-amber-200 transition-colors group">
+                                    <div className="w-10 h-10 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold shrink-0">
+                                        {i + 1}
+                                    </div>
+                                    <div className="flex-1">
+                                        <h4 className="font-bold text-slate-700 text-sm">{rec.title}</h4>
+                                        <p className="text-[10px] text-slate-400 mt-1">بناءً على ضعف في مجال: {rec.type} ({rec.count} حالة)</p>
+                                    </div>
+                                    <button 
+                                        onClick={() => onProgramSeminar && onProgramSeminar(rec.title)}
+                                        className="text-xs bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-800 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
+                                    >
+                                        برمجة
+                                    </button>
+                                </div>
+                            )) : (
+                                <div className="text-center py-8 text-slate-400">
+                                    <CheckCircle2 size={32} className="mx-auto mb-2 opacity-30 text-emerald-500" />
+                                    <p className="text-sm">لا توجد نقائص ملحوظة في التقارير الكلاسيكية.</p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* 1. Global KPIs (Common for both views) */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-blue-100 flex items-center justify-between hover:shadow-md transition-shadow">
-                    <div>
-                        <p className="text-gray-500 text-sm font-bold mb-1">{selectedSchool ? 'أساتذة المدرسة' : 'إجمالي الأساتذة'}</p>
-                        <p className="text-3xl font-bold text-blue-900">{totalTeachers}</p>
-                    </div>
-                    <div className="bg-blue-50 p-3 rounded-full text-blue-600"><Users size={24} /></div>
-                </div>
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-green-100 flex items-center justify-between hover:shadow-md transition-shadow">
-                    <div>
-                        <p className="text-gray-500 text-sm font-bold mb-1">متوسط النقاط</p>
-                        <p className="text-3xl font-bold text-green-700">{avgMark}<span className="text-sm text-gray-400 font-normal">/20</span></p>
-                    </div>
-                    <div className="bg-green-50 p-3 rounded-full text-green-600"><Award size={24} /></div>
-                </div>
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-purple-100 flex items-center justify-between hover:shadow-md transition-shadow">
-                    <div>
-                        <p className="text-gray-500 text-sm font-bold mb-1">المدارس</p>
-                        <p className="text-3xl font-bold text-purple-900">{selectedSchool ? '1' : uniqueSchools}</p>
-                    </div>
-                    <div className="bg-purple-50 p-3 rounded-full text-purple-600"><School size={24} /></div>
-                </div>
-                <div onClick={onNavigateToPromotions} className="bg-indigo-600 p-6 rounded-2xl shadow-md border border-indigo-700 flex items-center justify-between cursor-pointer hover:bg-indigo-700 transition-colors group relative overflow-hidden">
-                    <div className="relative z-10 text-white">
-                        <p className="text-indigo-200 text-sm font-bold mb-1">المعنيون بالترقية</p>
-                        <div className="flex items-end gap-2"><p className="text-3xl font-bold">{promotionCandidateCount}</p><span className="text-xs mb-1.5 opacity-80">أستاذ</span></div>
-                        <div className="flex items-center gap-1 mt-1 text-[10px] text-indigo-100 font-bold group-hover:translate-x-[-2px] transition-transform"><span>عرض التفاصيل</span><ChevronLeft size={10} /></div>
-                    </div>
-                    <div className={`bg-indigo-500/50 p-3 rounded-full text-white relative z-10 ${promotionCandidateCount > 0 ? 'animate-pulse' : ''}`}><Zap size={24} /></div>
-                    <Zap size={80} className="absolute -bottom-4 -left-4 text-indigo-500 opacity-20" />
-                </div>
-            </div>
-
-            {/* ================= CONDITIONAL VIEWS ================= */}
-            
-            {/* VIEW 1: LEGACY ANALYTICS */}
-            {statsView === 'legacy' && (
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    {legacyAnalysis.stats.count === 0 ? (
-                        <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-gray-300 text-gray-400">
-                            <FileText size={48} className="mx-auto mb-3 opacity-20" />
-                            <p>لا توجد تقارير كلاسيكية مسجلة لعرض إحصائياتها.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-8">
-                            {/* Automated Training Suggestions (New) */}
-                            {legacyAnalysis.suggestions.length > 0 && (
-                                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 shadow-sm">
-                                    <h3 className="font-bold text-lg text-amber-900 mb-4 flex items-center gap-2">
-                                        <Lightbulb size={20} className="text-amber-600"/>
-                                        مقترحات التكوين (بناءً على النقائص الكلاسيكية)
+            {/* VIEW: MODERN ANALYTICS */}
+            {statsView === 'modern' && (
+                <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+                    
+                    {/* A. School Ranking (New) */}
+                    {!selectedSchool && schoolRankings.total > 0 && (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Top Schools */}
+                            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                                <div className="bg-emerald-50 p-4 border-b border-emerald-100 flex justify-between items-center">
+                                    <h3 className="font-bold text-emerald-800 flex items-center gap-2">
+                                        <Trophy size={18}/> المدارس المتميزة (Top 3)
                                     </h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {legacyAnalysis.suggestions.map((sugg, i) => (
-                                            <div key={i} className="bg-white p-4 rounded-xl border border-amber-100 flex items-start gap-3 shadow-sm hover:shadow-md transition-all">
-                                                <div className="bg-amber-100 p-2 rounded-lg text-amber-700 font-bold text-lg min-w-[40px] text-center">
-                                                    {sugg.count}
-                                                </div>
+                                </div>
+                                <div className="divide-y divide-slate-100">
+                                    {schoolRankings.top3.map((s, i) => (
+                                        <div key={i} className="p-4 flex items-center justify-between hover:bg-emerald-50/30 transition-colors">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${i===0 ? 'bg-yellow-100 text-yellow-700' : 'bg-slate-100 text-slate-600'}`}>#{i+1}</div>
                                                 <div>
-                                                    <h4 className="font-bold text-gray-800 text-sm">{sugg.title}</h4>
-                                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold mt-1 inline-block ${
-                                                        sugg.priority === 'عالية' ? 'bg-red-100 text-red-600' : 
-                                                        sugg.priority === 'متوسطة' ? 'bg-orange-100 text-orange-600' : 
-                                                        'bg-blue-100 text-blue-600'
-                                                    }`}>أولوية {sugg.priority}</span>
+                                                    <p className="font-bold text-slate-800 text-sm">{s.name}</p>
+                                                    <p className="text-[10px] text-slate-500">{s.count} أستاذ</p>
                                                 </div>
                                             </div>
-                                        ))}
-                                    </div>
+                                            <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded text-sm">{s.avg.toFixed(2)}</span>
+                                        </div>
+                                    ))}
                                 </div>
-                            )}
+                            </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* 1. Preparation Analysis */}
-                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-orange-100">
-                                    <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
-                                        <FileText className="text-orange-500" size={20} />
-                                        جودة إعداد الدروس
+                            {/* Schools Needing Support */}
+                            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                                <div className="bg-orange-50 p-4 border-b border-orange-100 flex justify-between items-center">
+                                    <h3 className="font-bold text-orange-800 flex items-center gap-2">
+                                        <AlertTriangle size={18}/> مؤسسات تحتاج مرافقة
                                     </h3>
-                                    <div className="space-y-4">
-                                        <div>
-                                            <div className="flex justify-between text-sm mb-1"><span className="font-bold text-gray-700">إعداد جيد</span><span className="font-bold text-green-600">{legacyAnalysis.stats.preparation.good}</span></div>
-                                            <div className="w-full bg-gray-100 rounded-full h-2.5"><div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${(legacyAnalysis.stats.preparation.good / legacyAnalysis.stats.count) * 100}%` }}></div></div>
-                                        </div>
-                                        <div>
-                                            <div className="flex justify-between text-sm mb-1"><span className="font-bold text-gray-700">متوسط / مقبول</span><span className="font-bold text-yellow-600">{legacyAnalysis.stats.preparation.medium}</span></div>
-                                            <div className="w-full bg-gray-100 rounded-full h-2.5"><div className="bg-yellow-500 h-2.5 rounded-full" style={{ width: `${(legacyAnalysis.stats.preparation.medium / legacyAnalysis.stats.count) * 100}%` }}></div></div>
-                                        </div>
-                                        <div>
-                                            <div className="flex justify-between text-sm mb-1"><span className="font-bold text-gray-700">ضعيف / ناقص</span><span className="font-bold text-red-600">{legacyAnalysis.stats.preparation.weak}</span></div>
-                                            <div className="w-full bg-gray-100 rounded-full h-2.5"><div className="bg-red-500 h-2.5 rounded-full" style={{ width: `${(legacyAnalysis.stats.preparation.weak / legacyAnalysis.stats.count) * 100}%` }}></div></div>
-                                        </div>
-                                    </div>
                                 </div>
-
-                                {/* 2. Objectives Achievement */}
-                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-blue-100">
-                                    <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
-                                        <Target className="text-blue-500" size={20} />
-                                        مدى تحقق الأهداف
-                                    </h3>
-                                    <div className="flex items-center justify-center gap-6 mt-4">
-                                        <div className="relative w-32 h-32">
-                                            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                                                <path className="text-gray-100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3" />
-                                                <path className="text-blue-500" strokeDasharray={`${(legacyAnalysis.stats.objectives.full / legacyAnalysis.stats.count) * 100}, 100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3" />
-                                            </svg>
-                                            <div className="absolute inset-0 flex items-center justify-center flex-col">
-                                                <span className="text-2xl font-bold text-blue-900">{Math.round((legacyAnalysis.stats.objectives.full / legacyAnalysis.stats.count) * 100)}%</span>
-                                                <span className="text-[10px] text-gray-500">تحقق كلي</span>
+                                <div className="divide-y divide-slate-100">
+                                    {schoolRankings.bottom3.map((s, i) => (
+                                        <div key={i} className="p-4 flex items-center justify-between hover:bg-orange-50/30 transition-colors">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold text-sm">!</div>
+                                                <div>
+                                                    <p className="font-bold text-slate-800 text-sm">{s.name}</p>
+                                                    <p className="text-[10px] text-slate-500">{s.count} أستاذ</p>
+                                                </div>
                                             </div>
+                                            <span className="font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded text-sm">{s.avg.toFixed(2)}</span>
                                         </div>
-                                        <div className="space-y-2 text-sm">
-                                            <div className="flex items-center gap-2"><div className="w-3 h-3 bg-blue-500 rounded-full"></div><span>كلي ({legacyAnalysis.stats.objectives.full})</span></div>
-                                            <div className="flex items-center gap-2"><div className="w-3 h-3 bg-gray-300 rounded-full"></div><span>جزئي/لم يتحقق ({legacyAnalysis.stats.objectives.partial + legacyAnalysis.stats.objectives.none})</span></div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* 3. Admin & Board Work */}
-                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-purple-100">
-                                    <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
-                                        <CheckSquare className="text-purple-500" size={20} />
-                                        الانضباط الإداري والتنظيمي
-                                    </h3>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-purple-50 p-3 rounded-lg text-center">
-                                            <p className="text-xs text-purple-800 font-bold mb-2">مراقبة السجلات</p>
-                                            <div className="text-2xl font-bold text-purple-900">
-                                                {Math.round((legacyAnalysis.stats.registers.monitored / legacyAnalysis.stats.count) * 100)}%
-                                            </div>
-                                            <p className="text-[10px] text-gray-500">تتم بانتظام</p>
-                                        </div>
-                                        <div className="bg-indigo-50 p-3 rounded-lg text-center">
-                                            <p className="text-xs text-indigo-800 font-bold mb-2">تنظيم السبورة</p>
-                                            <div className="text-2xl font-bold text-indigo-900">
-                                                {Math.round((legacyAnalysis.stats.board.organized / legacyAnalysis.stats.count) * 100)}%
-                                            </div>
-                                            <p className="text-[10px] text-gray-500">منظمة ومقروءة</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* 4. Notebooks Care */}
-                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-teal-100">
-                                    <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
-                                        <BookOpen className="text-teal-500" size={20} />
-                                        العناية بدفاتر التلاميذ
-                                    </h3>
-                                    <div className="flex items-end justify-between h-32 px-4 gap-4">
-                                        <div className="w-1/3 bg-teal-100 rounded-t-lg relative group h-full flex items-end justify-center">
-                                            <div className="w-full bg-teal-500 rounded-t-lg transition-all" style={{ height: `${(legacyAnalysis.stats.notebooks.good / legacyAnalysis.stats.count) * 100}%` }}></div>
-                                            <span className="absolute bottom-2 text-white font-bold text-sm drop-shadow-md">{legacyAnalysis.stats.notebooks.good}</span>
-                                            <span className="absolute -bottom-6 text-xs font-bold text-gray-600">حسنة</span>
-                                        </div>
-                                        <div className="w-1/3 bg-teal-100 rounded-t-lg relative group h-full flex items-end justify-center">
-                                            <div className="w-full bg-yellow-400 rounded-t-lg transition-all" style={{ height: `${(legacyAnalysis.stats.notebooks.medium / legacyAnalysis.stats.count) * 100}%` }}></div>
-                                            <span className="absolute bottom-2 text-white font-bold text-sm drop-shadow-md">{legacyAnalysis.stats.notebooks.medium}</span>
-                                            <span className="absolute -bottom-6 text-xs font-bold text-gray-600">متوسطة</span>
-                                        </div>
-                                        <div className="w-1/3 bg-teal-100 rounded-t-lg relative group h-full flex items-end justify-center">
-                                            <div className="w-full bg-red-400 rounded-t-lg transition-all" style={{ height: `${(legacyAnalysis.stats.notebooks.bad / legacyAnalysis.stats.count) * 100}%` }}></div>
-                                            <span className="absolute bottom-2 text-white font-bold text-sm drop-shadow-md">{legacyAnalysis.stats.notebooks.bad}</span>
-                                            <span className="absolute -bottom-6 text-xs font-bold text-gray-600">سيئة</span>
-                                        </div>
-                                    </div>
+                                    ))}
                                 </div>
                             </div>
                         </div>
                     )}
-                </div>
-            )}
 
-            {/* VIEW 2: MODERN ANALYTICS */}
-            {statsView === 'modern' && (
-                <div className="animate-in fade-in slide-in-from-right-4 duration-500">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         
-                        {/* A. Weakest Criteria */}
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-red-100 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-2 h-full bg-red-400"></div>
-                            <h3 className="font-bold text-lg text-gray-800 mb-2 flex items-center gap-2">
-                                <AlertTriangle className="text-red-500" size={20} />
-                                احتياجات التكوين (المعايير الأضعف)
-                            </h3>
-                            <p className="text-xs text-gray-400 mb-6">نقاط الضعف المسجلة في التقارير الحديثة</p>
+                        {/* B. Training Plan (Enhanced) */}
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 lg:col-span-2 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-1.5 h-full bg-red-400"></div>
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                                    <Presentation className="text-red-500" size={20} />
+                                    خطة التكوين المقترحة (الندوات)
+                                </h3>
+                            </div>
+                            
                             <div className="space-y-4">
-                                {weakestCriteria.length > 0 ? weakestCriteria.map((c, i) => (
-                                    <div key={i} className="relative">
-                                        <div className="flex justify-between items-center mb-1 text-sm">
-                                            <span className="font-bold text-gray-700 truncate ml-2" title={c.name}>{c.name}</span>
-                                            <span className="font-bold text-red-600 text-xs">{c.avg.toFixed(0)}% تحكم</span>
+                                {trainingPlan.length > 0 ? trainingPlan.map((item, i) => (
+                                    <div key={i} className="flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100 hover:border-red-200 transition-colors group">
+                                        <div className="w-10 h-10 rounded-lg bg-red-100 text-red-600 flex items-center justify-center font-bold shrink-0">
+                                            {i + 1}
                                         </div>
-                                        <div className="w-full bg-gray-100 rounded-full h-2">
-                                            <div className="bg-red-400 h-2 rounded-full transition-all duration-1000" style={{ width: `${c.avg}%` }}></div>
+                                        <div className="flex-1">
+                                            <div className="flex justify-between mb-1">
+                                                <h4 className="font-bold text-slate-700 text-sm">{item.suggestedTitle}</h4>
+                                                <span className="text-[10px] font-bold bg-white border px-2 py-0.5 rounded text-red-500">
+                                                    تحكم: {item.avg.toFixed(0)}%
+                                                </span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                                                <Target size={10}/> يستهدف معيار: {item.name} ({item.category})
+                                            </p>
                                         </div>
-                                        <p className="text-[10px] text-gray-400 mt-0.5">{c.category}</p>
+                                        <button 
+                                            onClick={() => onProgramSeminar && onProgramSeminar(item.suggestedTitle)}
+                                            className="text-xs bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-800 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
+                                        >
+                                            برمجة
+                                        </button>
                                     </div>
                                 )) : (
-                                    <div className="text-center py-10 text-gray-400">
-                                        <CheckCircle2 size={40} className="mx-auto mb-2 opacity-20" />
-                                        <p className="text-sm">لا توجد بيانات كافية للتحليل بعد</p>
+                                    <div className="text-center py-10 text-slate-400">
+                                        <CheckCircle2 size={40} className="mx-auto mb-2 opacity-20 text-emerald-500" />
+                                        <p className="text-sm">لا توجد احتياجات تكوينية ملحة حالياً.</p>
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        {/* B. Radar Chart */}
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                            <h3 className="font-bold text-lg text-gray-800 mb-2 flex items-center gap-2">
+                        {/* C. Competency Map (Radar with Labels) */}
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center">
+                            <h3 className="font-bold text-lg text-slate-800 mb-2 flex items-center gap-2 w-full">
                                 <Radar className="text-indigo-500" size={20} />
-                                بروفايل الكفاءة ({selectedSchool ? 'المدرسة' : 'متوسط المقاطعة'})
+                                خارطة الكفاءات المهنية
                             </h3>
-                            <p className="text-xs text-gray-400 mb-6">تحليل الأداء في المجالات التربوية التسعة</p>
-                            <div className="flex justify-center relative">
-                                <svg viewBox="0 0 200 200" className="w-64 h-64 overflow-visible">
+                            <p className="text-xs text-slate-400 mb-6 w-full">توزيع نقاط القوة والضعف حسب المجالات</p>
+                            
+                            <div className="relative w-64 h-64">
+                                {/* Simple SVG Radar Implementation with Labels */}
+                                <svg viewBox="0 0 200 200" className="w-full h-full overflow-visible">
+                                    {/* Grid Circles */}
                                     {[20, 40, 60, 80, 100].map(r => (
-                                        <circle key={r} cx="100" cy="100" r={r * 0.8} fill="none" stroke="#e5e7eb" strokeDasharray="4 4" />
+                                        <circle key={r} cx="100" cy="100" r={r * 0.8} fill="none" stroke="#e2e8f0" strokeDasharray="4 4" />
                                     ))}
+                                    
+                                    {/* Axis Lines */}
                                     {radarData.map((_, i) => {
                                         const angle = (Math.PI * 2 * i) / radarData.length - Math.PI / 2;
                                         const x = 100 + 80 * Math.cos(angle);
                                         const y = 100 + 80 * Math.sin(angle);
-                                        return <line key={i} x1="100" y1="100" x2={x} y2={y} stroke="#f3f4f6" />;
+                                        return <line key={i} x1="100" y1="100" x2={x} y2={y} stroke="#f1f5f9" />;
                                     })}
-                                    <polygon points={generateRadarPath(radarData)} fill="rgba(79, 70, 229, 0.2)" stroke="#4f46e5" strokeWidth="2" />
+
+                                    {/* The Shape */}
+                                    <polygon 
+                                        points={radarData.map((d, i) => {
+                                            const angle = (Math.PI * 2 * i) / radarData.length - Math.PI / 2;
+                                            const val = Math.max(d.value, 10); // Minimum visibility
+                                            const x = 100 + (80 * (val / 100)) * Math.cos(angle);
+                                            const y = 100 + (80 * (val / 100)) * Math.sin(angle);
+                                            return `${x},${y}`;
+                                        }).join(' ')}
+                                        fill="rgba(99, 102, 241, 0.2)" 
+                                        stroke="#6366f1" 
+                                        strokeWidth="2"
+                                    />
+
+                                    {/* Labels & Dots */}
                                     {radarData.map((d, i) => {
                                         const angle = (Math.PI * 2 * i) / radarData.length - Math.PI / 2;
                                         const x = 100 + 95 * Math.cos(angle);
                                         const y = 100 + 95 * Math.sin(angle);
                                         return (
-                                            <text key={i} x={x} y={y} textAnchor="middle" dominantBaseline="middle" className="text-[8px] font-bold fill-gray-600">
-                                                {d.domain}
-                                            </text>
+                                            <g key={i}>
+                                                <text x={x} y={y} textAnchor="middle" dominantBaseline="middle" className="text-[8px] font-bold fill-slate-500" style={{ fontSize: '8px' }}>
+                                                    {d.domain}
+                                                </text>
+                                                <text x={x} y={y+10} textAnchor="middle" className="text-[8px] font-bold fill-indigo-600">
+                                                    {d.value.toFixed(0)}%
+                                                </text>
+                                            </g>
                                         );
                                     })}
                                 </svg>
                             </div>
                         </div>
 
-                        {/* C. Students by Level */}
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
-                            <h3 className="font-bold text-lg text-gray-800 mb-6 flex items-center gap-2">
-                                <BookOpen className="text-blue-500" size={20} />
-                                تعداد التلاميذ حسب المستوى
-                            </h3>
-                            <div className="flex-1 flex items-end justify-between gap-4 px-2 pb-2 min-h-[150px]">
-                                {studentsByLevel.length > 0 ? studentsByLevel.map((lvl, idx) => {
-                                    const heightPercent = maxStudentCount > 0 ? (lvl.count / maxStudentCount) * 100 : 0;
-                                    const displayHeight = Math.max(heightPercent, 10);
-                                    return (
-                                        <div key={idx} className="flex-1 flex flex-col justify-end items-center group relative z-10 h-full">
-                                            <div className="mb-1 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold bg-gray-800 text-white px-1.5 py-0.5 rounded absolute -top-8 whitespace-nowrap z-20">{lvl.count} تلميذ</div>
-                                            <div className="w-full bg-blue-100 rounded-t-md hover:bg-blue-300 transition-all duration-500 relative" style={{ height: `${displayHeight}%` }}>
-                                                <div className="absolute bottom-1 w-full text-center text-[9px] font-bold text-blue-700">{lvl.count}</div>
-                                            </div>
-                                            <p className="text-[9px] text-gray-500 mt-2 text-center h-8 leading-tight flex items-center justify-center">{lvl.name.replace('السنة', 'س')}</p>
-                                        </div>
-                                    );
-                                }) : <div className="w-full text-center text-gray-300 text-sm italic">لا توجد بيانات مستويات بعد</div>}
-                            </div>
-                        </div>
-
-                        {/* D. Teachers By Degree */}
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                            <h3 className="font-bold text-lg text-gray-800 mb-6 flex items-center gap-2">
-                                <GraduationCap className="text-emerald-500" size={20} />
-                                المؤهلات العلمية
-                            </h3>
-                            <div className="space-y-4">
-                                {teachersByDegree.length > 0 ? teachersByDegree.map((d, i) => (
-                                    <div key={i}>
-                                        <div className="flex justify-between items-center mb-1 text-sm"><span className="font-bold text-gray-700 truncate text-xs" title={d.name}>{d.name}</span><span className="font-bold text-gray-500 text-xs">{d.count}</span></div>
-                                        <div className="w-full bg-gray-50 rounded-full h-2"><div className="bg-emerald-400 h-2 rounded-full transition-all duration-1000" style={{ width: `${(d.count / maxDegreeCount) * 100}%` }}></div></div>
-                                    </div>
-                                )) : <div className="text-center text-gray-300 text-sm italic py-8">لا توجد بيانات شهادات</div>}
-                            </div>
-                        </div>
-
-                        {/* E. Comparative Analysis (Enhanced) */}
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 md:col-span-2 flex flex-col md:flex-row gap-8">
-                            <div className="flex-1">
-                                <h3 className="font-bold text-lg text-gray-800 mb-2 flex items-center gap-2">
-                                    <Briefcase className="text-amber-500" size={20} />
-                                    هرم الأقدمية والخبرة
-                                </h3>
-                                <p className="text-xs text-gray-400 mb-6">توزيع الأساتذة حسب سنوات الخدمة</p>
-                                <div className="space-y-3">
-                                    {seniorityPyramid.slice().reverse().map((group, i) => {
-                                        const widthPercent = totalTeachers > 0 ? (group.count / totalTeachers) * 100 : 0;
-                                        const displayWidth = Math.max(widthPercent, 10); 
-                                        return (
-                                            <div key={i} className="flex items-center gap-3">
-                                                <span className="text-[10px] text-gray-500 w-24 text-right shrink-0">{group.label}</span>
-                                                <div className="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden flex justify-end">
-                                                    <div 
-                                                        className={`h-full ${group.color} flex items-center justify-center text-white text-[10px] font-bold transition-all duration-1000`} 
-                                                        style={{ width: `${displayWidth}%` }}
-                                                    >
-                                                        {group.count > 0 ? group.count : ''}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            </div>
-                            <div className="w-px bg-gray-100 hidden md:block"></div>
-                            <div className="flex-1">
-                                <h3 className="font-bold text-lg text-gray-800 mb-2 flex items-center gap-2">
+                        {/* D. Comparative Analysis (Improved Logic) */}
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 lg:col-span-3">
+                             <div className="flex justify-between items-center mb-6">
+                                <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
                                     <GitCompare className="text-cyan-500" size={20} />
                                     تحليل مقارن: الخبرة مقابل التجديد
                                 </h3>
-                                <p className="text-xs text-gray-400 mb-6">مقارنة الأداء البيداغوجي بين الأجيال (5 معايير)</p>
-                                <div className="space-y-3">
-                                    {[
-                                        { label: 'التكنولوجيا', junior: comparativeAnalysis.juniors.tech, senior: comparativeAnalysis.seniors.tech, icon: MonitorSmartphone },
-                                        { label: 'التحكم الصفي', junior: comparativeAnalysis.juniors.control, senior: comparativeAnalysis.seniors.control, icon: ShieldCheck },
-                                        { label: 'البيداغوجيا', junior: comparativeAnalysis.juniors.pedagogy, senior: comparativeAnalysis.seniors.pedagogy, icon: PenTool },
-                                        { label: 'التخطيط', junior: comparativeAnalysis.juniors.planning, senior: comparativeAnalysis.seniors.planning, icon: ClipboardList },
-                                        { label: 'التقويم', junior: comparativeAnalysis.juniors.evaluation, senior: comparativeAnalysis.seniors.evaluation, icon: CheckSquare }
-                                    ].map((item, idx) => (
-                                        <div key={idx}>
-                                            <div className="flex justify-between items-center mb-1">
-                                                <span className="text-[10px] font-bold text-gray-700 flex items-center gap-1"><item.icon size={12}/> {item.label}</span>
+                                <div className="flex gap-4 text-xs font-bold">
+                                    <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-cyan-400"></div> جدد (أقل من 10)</span>
+                                    <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-400"></div> قدماء (أكثر من 10)</span>
+                                </div>
+                             </div>
+                             
+                             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                {[
+                                    { label: 'استخدام التكنولوجيا', j: comparativeAnalysis.juniors.tech, s: comparativeAnalysis.seniors.tech, icon: MonitorSmartphone },
+                                    { label: 'التحكم الصفي', j: comparativeAnalysis.juniors.control, s: comparativeAnalysis.seniors.control, icon: ShieldCheck },
+                                    { label: 'التخطيط البيداغوجي', j: comparativeAnalysis.juniors.planning, s: comparativeAnalysis.seniors.planning, icon: ClipboardList }
+                                ].map((item, idx) => (
+                                    <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                        <div className="flex items-center gap-2 mb-3 text-slate-700 font-bold">
+                                            <item.icon size={16} className="text-slate-400"/>
+                                            {item.label}
+                                        </div>
+                                        <div className="space-y-3">
+                                            <div className="relative pt-1">
+                                                <div className="flex justify-between text-xs mb-1"><span>الجدد</span><span className="font-bold">{item.j.toFixed(0)}%</span></div>
+                                                <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-cyan-400 rounded-full" style={{ width: `${item.j}%` }}></div>
+                                                </div>
                                             </div>
-                                            <div className="flex h-2 rounded-full overflow-hidden bg-gray-100 relative">
-                                                <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-white z-10"></div>
-                                                <div className="w-1/2 flex justify-end"><div className="h-full bg-cyan-400" style={{ width: `${item.junior}%` }}></div></div>
-                                                <div className="w-1/2 flex justify-start"><div className="h-full bg-amber-400" style={{ width: `${item.senior}%` }}></div></div>
+                                            <div className="relative pt-1">
+                                                <div className="flex justify-between text-xs mb-1"><span>القدماء</span><span className="font-bold">{item.s.toFixed(0)}%</span></div>
+                                                <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-amber-400 rounded-full" style={{ width: `${item.s}%` }}></div>
+                                                </div>
                                             </div>
                                         </div>
-                                    ))}
-                                    <div className="flex justify-between text-[9px] mt-2 text-gray-400 px-2"><span>جدد (أقل من 10)</span><span>قدماء (أكثر من 10)</span></div>
-                                </div>
-                            </div>
+                                    </div>
+                                ))}
+                             </div>
                         </div>
 
-                        {/* H. Marks Histogram (Fixed Labels) */}
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
-                            <h3 className="font-bold text-lg text-gray-800 mb-6 flex items-center gap-2">
-                                <Award className="text-blue-500" size={20} />
-                                توزيع النقاط العام
-                            </h3>
-                            <div className="flex-1 flex items-end justify-between gap-2 px-2 pb-2 border-b border-gray-100 relative min-h-[150px]">
-                                {marksDistribution.ranges.map((range, idx) => {
-                                    const heightPercent = (range.count / marksDistribution.maxCount) * 100;
-                                    return (
-                                        <div key={idx} className="flex-1 flex flex-col justify-end items-center group relative z-10 h-full">
-                                            <div className="mb-1 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold bg-gray-800 text-white px-1.5 py-0.5 rounded absolute -top-6">{range.count}</div>
-                                            <div className={`w-full ${range.color} rounded-t-md transition-all duration-500 hover:opacity-80`} style={{ height: `${heightPercent > 5 ? heightPercent : 5}%` }}></div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                            {/* Fixed 5 Labels Grid */}
-                            <div className="grid grid-cols-5 text-[9px] text-gray-500 mt-2 text-center font-bold">
-                                <span>ضعيف</span>
-                                <span>متوسط</span>
-                                <span>جيد</span>
-                                <span>جيد جداً</span>
-                                <span>ممتاز</span>
-                            </div>
-                            <div className="mt-6 pt-4 border-t border-dashed">
-                                <h4 className="text-xs font-bold text-gray-500 mb-3">الوضعيات المهنية</h4>
-                                <div className="flex items-center justify-center gap-6">
-                                    <div className="relative w-16 h-16 rounded-full border-4 border-gray-100" style={{ background: totalTeachers > 0 ? pieGradient : '#e5e7eb' }}></div>
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-1.5 text-[10px]"><div className="w-2 h-2 rounded-full bg-emerald-500"></div><span className="text-gray-600">مرسم ({statusCounts.titulaire})</span></div>
-                                        <div className="flex items-center gap-1.5 text-[10px]"><div className="w-2 h-2 rounded-full bg-orange-500"></div><span className="text-gray-600">متعاقد ({statusCounts.contractuel})</span></div>
-                                        <div className="flex items-center gap-1.5 text-[10px]"><div className="w-2 h-2 rounded-full bg-blue-500"></div><span className="text-gray-600">متربص ({statusCounts.stagiere})</span></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
             )}

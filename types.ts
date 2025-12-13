@@ -18,6 +18,14 @@ export interface Teacher {
   privateNotes?: string;
 }
 
+export interface InspectorProfile {
+    fullName: string;
+    wilaya: string;
+    district: string;
+    signatureUrl?: string;
+    showSignature: boolean;
+}
+
 export interface ObservationItem {
   id: string;
   category: string; 
@@ -178,6 +186,9 @@ export interface QuarterlyReportData {
     visitsTraining: number;   
     visitsTrainingBenefit: number; 
     
+    visitsMorning: number;
+    visitsEvening: number;
+
     tasksInvestigations: number; 
     tasksSupervision: number;    
 
@@ -201,8 +212,8 @@ export interface QuarterlyReportData {
     levels: {
         prep: number;
         year1: number;
-        year2: number;
         year3: number;
+        year2: number;
         year4: number;
         year5: number;
     };
@@ -236,6 +247,19 @@ export interface LibraryLink {
     title: string;
     url: string;
     category: 'legislation' | 'pedagogy' | 'admin' | 'other';
+}
+
+// --- MAIL REGISTER TYPES ---
+export interface MailRecord {
+    id: string;
+    type: 'incoming' | 'outgoing';
+    year: number;
+    number: string; // Can be a number "12" or "بدون رقم"
+    date: string;
+    correspondent: string; // Sender for Incoming, Recipient for Outgoing
+    subject: string;
+    notes?: string;
+    reference?: string; // Optional reference for incoming mail
 }
 
 export enum MessageRole {
@@ -310,5 +334,21 @@ export enum AppView {
   ACQUISITIONS = 'ACQUISITIONS',
   SEMINARS = 'SEMINARS',
   ADMIN_ASSISTANT = 'ADMIN_ASSISTANT',
-  BRANDING = 'BRANDING'
+  BRANDING = 'BRANDING',
+  ADMIN_DASHBOARD = 'ADMIN_DASHBOARD'
+}
+
+// --- SUBSCRIPTION TYPES ---
+export type SubscriptionStatus = 'trial' | 'active' | 'expired' | 'manual_pending';
+export type PlanType = 'monthly' | 'quarterly' | 'yearly';
+
+export interface UserProfile {
+    id: string;
+    full_name: string;
+    subscription_status: SubscriptionStatus;
+    trial_ends_at: string;
+    subscription_ends_at?: string;
+    plan_type?: PlanType;
+    payment_receipt_url?: string;
+    email?: string; // Optional helper
 }

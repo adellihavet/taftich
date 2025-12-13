@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ReportData, Teacher } from '../types';
 import { generateReportAssessment, suggestImprovement } from '../services/geminiService';
-import { Wand2, Printer, RefreshCcw, Loader2, Sparkles, Cloud, MapPin, User, Briefcase, BookOpen, Stamp, ChevronDown, PenTool, Maximize2, Minimize2 } from 'lucide-react';
+import { Wand2, Printer, RefreshCcw, Loader2, Sparkles, Cloud, MapPin, User, Briefcase, BookOpen, Stamp, ChevronDown, PenTool, Maximize2, Minimize2, Lock } from 'lucide-react';
 import { OBSERVATION_SUGGESTIONS, MODERN_SUBJECTS, MODERN_DEGREES, MODERN_RANKS, MODERN_LEVELS } from '../constants';
 import VoiceTextarea from './VoiceTextarea';
 import VoiceInput from './VoiceInput';
@@ -16,6 +16,7 @@ interface ReportEditorProps {
     isGoldMember: boolean;
     onUpgradeClick: () => void;
     onUploadSignature?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    isExpired?: boolean;
 }
 
 const ReportEditor: React.FC<ReportEditorProps> = ({ 
@@ -26,11 +27,13 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
     onPrint,
     isGoldMember,
     onUpgradeClick,
-    onUploadSignature
+    onUploadSignature,
+    isExpired = false
 }) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [activeTab, setActiveTab] = useState<'info' | 'rubric' | 'result'>('info');
     const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
+    // Default to manual, AI mode UI is removed
     const [editMode, setEditMode] = useState<'manual' | 'ai'>('manual');
     const [isFocusMode, setIsFocusMode] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -43,13 +46,15 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
     }, [report]);
 
     useEffect(() => {
-        setSaveStatus('saving');
-        const timer = setTimeout(() => {
-            localStorage.setItem('mufattish_draft', JSON.stringify(report));
-            setSaveStatus('saved');
-        }, 1000);
-        return () => clearTimeout(timer);
-    }, [report]);
+        if (!isExpired) {
+            setSaveStatus('saving');
+            const timer = setTimeout(() => {
+                localStorage.setItem('mufattish_draft', JSON.stringify(report));
+                setSaveStatus('saved');
+            }, 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [report, isExpired]);
 
     useEffect(() => {
         if (editMode === 'ai' && !isGoldMember) {
@@ -58,16 +63,19 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
     }, [isGoldMember, editMode]);
 
     const updateField = (field: keyof ReportData, value: any) => {
+        if (isExpired) return;
         onChange({ ...report, [field]: value });
     };
     
     const updateTeacherField = (field: keyof Teacher, value: any) => {
+        if (isExpired) return;
         if (onTeacherChange) {
             onTeacherChange({ ...teacher, [field]: value });
         }
     };
 
     const handleModeChange = (mode: 'manual' | 'ai') => {
+        if (isExpired) return;
         if (mode === 'ai' && !isGoldMember) {
             onUpgradeClick();
             return;
@@ -76,9 +84,11 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
     };
 
     const updateScore = async (obsId: string, score: 2 | 1 | 0 | null) => {
+        if (isExpired) return;
         const newObservations = report.observations.map(o => o.id === obsId ? { ...o, score } : o);
         onChange({ ...report, observations: newObservations });
         
+        // AI Logic kept but unreachable as editMode is stuck on 'manual' due to UI removal
         if (editMode === 'ai' && score !== null && score < 2) {
             const targetObs = newObservations.find(o => o.id === obsId);
             if (targetObs && !targetObs.improvementNotes.trim()) {
@@ -106,6 +116,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
     };
 
     const updateObsNote = (obsId: string, text: string) => {
+        if (isExpired) return;
         const newObservations = report.observations.map(o => 
             o.id === obsId ? { ...o, improvementNotes: text } : o
         );
@@ -113,6 +124,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
     };
 
     const handleGenerateAssessment = async () => {
+        if (isExpired) return;
         if (!isGoldMember) {
             onUpgradeClick();
             return;
@@ -137,6 +149,15 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
 
     return (
         <div className={`h-full flex flex-col bg-gray-50 transition-all duration-300 ${isFocusMode ? 'fixed inset-0 z-[100] w-screen h-screen' : ''}`}>
+            
+            {/* Expired Warning Banner */}
+            {isExpired && (
+                <div className="bg-red-500 text-white text-center py-1 text-sm font-bold flex items-center justify-center gap-2">
+                    <Lock size={14} />
+                    <span>وضع المشاهدة فقط - الاشتراك منتهي</span>
+                </div>
+            )}
+
             {/* Toolbar */}
             <div className="bg-white border-b p-4 flex justify-between items-center sticky top-0 z-20 shadow-sm shrink-0">
                 <div className="flex gap-2 overflow-x-auto no-scrollbar">
@@ -146,19 +167,21 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
                 </div>
                 
                 <div className="flex items-center gap-2 md:gap-4">
-                    <div className="hidden md:flex items-center gap-2 text-xs font-medium transition-colors duration-500">
-                        {saveStatus === 'saving' ? (
-                            <>
-                                <RefreshCcw size={14} className="animate-spin text-blue-500" />
-                                <span className="text-blue-500">جاري الحفظ...</span>
-                            </>
-                        ) : (
-                            <>
-                                <Cloud size={14} className="text-green-600" />
-                                <span className="text-green-600">تم الحفظ</span>
-                            </>
-                        )}
-                    </div>
+                    {!isExpired && (
+                        <div className="hidden md:flex items-center gap-2 text-xs font-medium transition-colors duration-500">
+                            {saveStatus === 'saving' ? (
+                                <>
+                                    <RefreshCcw size={14} className="animate-spin text-blue-500" />
+                                    <span className="text-blue-500">جاري الحفظ...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Cloud size={14} className="text-green-600" />
+                                    <span className="text-green-600">تم الحفظ</span>
+                                </>
+                            )}
+                        </div>
+                    )}
                     
                     {/* Focus Mode Toggle */}
                     <button 
@@ -169,7 +192,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
                         {isFocusMode ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
                     </button>
 
-                    {onUploadSignature && (
+                    {onUploadSignature && !isExpired && (
                         <div className="relative">
                             <input type="file" ref={fileInputRef} onChange={onUploadSignature} className="hidden" accept="image/*" />
                             <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-2 rounded-lg hover:bg-indigo-100 border border-indigo-200 transition-colors" title="رفع صورة الختم/الإمضاء">
@@ -179,20 +202,22 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
                         </div>
                     )}
 
-                    <button onClick={onPrint} className="flex items-center gap-2 bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900 shadow-sm">
-                        <Printer size={18} />
+                    <button 
+                        onClick={isExpired ? onUpgradeClick : onPrint} 
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg shadow-sm ${isExpired ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-gray-800 text-white hover:bg-gray-900'}`}
+                    >
+                        {isExpired ? <Lock size={18}/> : <Printer size={18} />}
                         <span className="hidden md:inline">طباعة</span>
                     </button>
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 max-w-4xl mx-auto w-full">
+            <div className={`flex-1 overflow-y-auto p-4 md:p-6 max-w-4xl mx-auto w-full ${isExpired ? 'pointer-events-none opacity-80' : ''}`}>
                 
                 {/* Tab 1: Info */}
                 {activeTab === 'info' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                         
-                        {/* REMOVED overflow-hidden, ADDED rounded-tr-xl to icon to maintain shape */}
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 relative">
                              <div className="absolute top-0 right-0 bg-blue-50 p-2 rounded-bl-xl rounded-tr-xl border-l border-b border-blue-100 text-blue-700">
                                 <MapPin size={20} />
@@ -204,7 +229,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
                                 <VoiceInput label="المدرسة الابتدائية" value={report.school} onChange={v => updateField('school', v)} />
                             </div>
                         </div>
-
+                        
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 relative">
                             <div className="absolute top-0 right-0 bg-indigo-50 p-2 rounded-bl-xl rounded-tr-xl border-l border-b border-indigo-100 text-indigo-700">
                                 <User size={20} />
@@ -285,22 +310,9 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
                 {/* Tab 2: Rubric */}
                 {activeTab === 'rubric' && (
                     <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
-                        
-                        <div className="bg-white p-3 rounded-lg shadow-sm border mb-4 flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                                <span className="font-bold text-gray-700 flex items-center gap-2"><PenTool size={16}/> وضع التقييم:</span>
-                                <div className="flex bg-gray-100 rounded-lg p-1">
-                                    <button onClick={() => handleModeChange('manual')} className={`px-3 py-1 rounded-md text-sm font-bold transition-all ${editMode === 'manual' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}>يدوي</button>
-                                    <button onClick={() => handleModeChange('ai')} className={`px-3 py-1 rounded-md text-sm font-bold transition-all flex items-center gap-1 ${editMode === 'ai' ? 'bg-indigo-100 text-indigo-700 border border-indigo-200 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                                        <Sparkles size={12} /> ذكي (AI)
-                                    </button>
-                                </div>
-                            </div>
-                            {editMode === 'ai' && <span className="text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 flex items-center gap-1"><Sparkles size={10} /> سيتم اقتراح ملاحظات عند اختيار تقييم منخفض</span>}
-                        </div>
+                        {/* AI Toggle Removed Here */}
 
                         {categories.map((category, idx) => (
-                            // Removed overflow-hidden here too to prevent clipping if we add dropdowns later
                             <div key={category} className="bg-white rounded-xl shadow-sm border border-gray-100">
                                 <div className="bg-gray-50 px-6 py-3 border-b border-gray-100 flex justify-between items-center rounded-t-xl">
                                     <h3 className="font-bold text-lg text-gray-800">{idx + 1}. {category}</h3>
@@ -345,17 +357,10 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
                     <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-500">
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                             <h2 className="text-lg font-bold text-gray-800 border-b pb-2 mb-4">القرار النهائي</h2>
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-1">توجيهات إضافية للذكاء الاصطناعي (اختياري)</label>
-                                <VoiceTextarea value={report.assessmentKeywords || ''} onChange={val => updateField('assessmentKeywords', val)} placeholder="مثلاً: التركيز على ضعف التحكم في القسم..." className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none" minHeight="min-h-[40px]" />
-                            </div>
+                            {/* Removed assessmentKeywords input and AI Generate Button */}
                             <div className="mb-4 relative">
                                 <label className="block text-sm font-medium text-gray-700 mb-1">التقدير العام (نص التقرير)</label>
-                                <VoiceTextarea value={report.generalAssessment} onChange={val => updateField('generalAssessment', val)} className="w-full border rounded-lg p-4 focus:ring-2 focus:ring-blue-500 outline-none leading-relaxed text-justify" placeholder="سيتم كتابة التقرير هنا..." minHeight="min-h-[250px]" />
-                                <button onClick={handleGenerateAssessment} disabled={isGenerating} className="absolute bottom-4 left-14 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-md flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                                    {isGenerating ? <Loader2 className="animate-spin" size={18} /> : <Wand2 size={18} />}
-                                    {report.generalAssessment ? 'إعادة الصياغة بالذكاء الاصطناعي' : 'توليد التقرير بالذكاء الاصطناعي'}
-                                </button>
+                                <VoiceTextarea value={report.generalAssessment} onChange={val => updateField('generalAssessment', val)} className="w-full border rounded-lg p-4 focus:ring-2 focus:ring-blue-500 outline-none leading-relaxed text-justify" placeholder="اكتب التقرير هنا..." minHeight="min-h-[250px]" />
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-4 items-end">
                                 <div>

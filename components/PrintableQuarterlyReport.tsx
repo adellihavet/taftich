@@ -20,6 +20,9 @@ const PrintableQuarterlyReport: React.FC<PrintableQuarterlyReportProps> = ({ rep
   const pct = (val: number, total: number) => total === 0 ? '' : ((val / total) * 100).toFixed(1) + '%';
   const currentDate = new Date().toLocaleDateString('ar-DZ', { year: 'numeric', month: '2-digit', day: '2-digit' });
 
+  // Calculate timing total separately to show accurate percentages within the timing table
+  const totalTiming = (report.visitsMorning || 0) + (report.visitsEvening || 0);
+
   return (
     <div className="font-serif text-black leading-normal bg-white" dir="rtl">
         
@@ -100,45 +103,71 @@ const PrintableQuarterlyReport: React.FC<PrintableQuarterlyReportProps> = ({ rep
                     </table>
                 </div>
 
-                {/* Table 2: Days */}
-                <div>
-                    <h3 className="font-bold text-[11px] mb-1 text-right underline">* توزيع الزيارات على الأيام لكل المواد</h3>
-                    <table className="w-full border-collapse border border-black text-center text-[10px]">
-                        <thead>
-                            <tr className="bg-gray-100 h-6">
-                                <th className="border border-black p-1 w-24">البيان</th>
-                                <th className="border border-black p-1">الأحد</th>
-                                <th className="border border-black p-1">الإثنين</th>
-                                <th className="border border-black p-1">الثلاثاء</th>
-                                <th className="border border-black p-1">الأربعاء</th>
-                                <th className="border border-black p-1">الخميس</th>
-                                <th className="border border-black p-1 bg-gray-200">المجموع</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr className="h-6">
-                                <td className="border border-black p-1 font-bold bg-gray-50">العدد</td>
-                                <td className="border border-black p-1">{report.days.sun}</td>
-                                <td className="border border-black p-1">{report.days.mon}</td>
-                                <td className="border border-black p-1">{report.days.tue}</td>
-                                <td className="border border-black p-1">{report.days.wed}</td>
-                                <td className="border border-black p-1">{report.days.thu}</td>
-                                <td className="border border-black p-1 font-bold bg-gray-50">{totalDays}</td>
-                            </tr>
-                            <tr className="h-6">
-                                <td className="border border-black p-1 font-bold bg-gray-50">النسبة %</td>
-                                <td className="border border-black p-1">{pct(report.days.sun, totalDays)}</td>
-                                <td className="border border-black p-1">{pct(report.days.mon, totalDays)}</td>
-                                <td className="border border-black p-1">{pct(report.days.tue, totalDays)}</td>
-                                <td className="border border-black p-1">{pct(report.days.wed, totalDays)}</td>
-                                <td className="border border-black p-1">{pct(report.days.thu, totalDays)}</td>
-                                <td className="border border-black p-1 font-bold bg-gray-50">100%</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                {/* Split Row: Days + Timing */}
+                <div className="flex gap-4 items-start">
+                    {/* Table 2: Days (Compressed width) */}
+                    <div className="flex-[2]">
+                        <h3 className="font-bold text-[11px] mb-1 text-right underline">* توزيع الزيارات على الأيام</h3>
+                        <table className="w-full border-collapse border border-black text-center text-[10px]">
+                            <thead>
+                                <tr className="bg-gray-100 h-6">
+                                    <th className="border border-black p-1 w-20">البيان</th>
+                                    <th className="border border-black p-1">الأحد</th>
+                                    <th className="border border-black p-1">الإثنين</th>
+                                    <th className="border border-black p-1">الثلاثاء</th>
+                                    <th className="border border-black p-1">الأربعاء</th>
+                                    <th className="border border-black p-1">الخميس</th>
+                                    <th className="border border-black p-1 bg-gray-200">المجموع</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr className="h-6">
+                                    <td className="border border-black p-1 font-bold bg-gray-50">العدد</td>
+                                    <td className="border border-black p-1">{report.days.sun}</td>
+                                    <td className="border border-black p-1">{report.days.mon}</td>
+                                    <td className="border border-black p-1">{report.days.tue}</td>
+                                    <td className="border border-black p-1">{report.days.wed}</td>
+                                    <td className="border border-black p-1">{report.days.thu}</td>
+                                    <td className="border border-black p-1 font-bold bg-gray-50">{totalDays}</td>
+                                </tr>
+                                <tr className="h-6">
+                                    <td className="border border-black p-1 font-bold bg-gray-50">النسبة %</td>
+                                    <td className="border border-black p-1">{pct(report.days.sun, totalDays)}</td>
+                                    <td className="border border-black p-1">{pct(report.days.mon, totalDays)}</td>
+                                    <td className="border border-black p-1">{pct(report.days.tue, totalDays)}</td>
+                                    <td className="border border-black p-1">{pct(report.days.wed, totalDays)}</td>
+                                    <td className="border border-black p-1">{pct(report.days.thu, totalDays)}</td>
+                                    <td className="border border-black p-1 font-bold bg-gray-50">100%</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Table 3: Timing (New Table) */}
+                    <div className="flex-1">
+                        <h3 className="font-bold text-[11px] mb-1 text-right underline">* توقيت الزيارات</h3>
+                        <table className="w-full border-collapse border border-black text-center text-[10px]">
+                            <thead>
+                                <tr className="bg-gray-100 h-6">
+                                    <th className="border border-black p-1">الصباح</th>
+                                    <th className="border border-black p-1">المساء</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr className="h-6">
+                                    <td className="border border-black p-1 font-bold">{report.visitsMorning || 0}</td>
+                                    <td className="border border-black p-1 font-bold">{report.visitsEvening || 0}</td>
+                                </tr>
+                                <tr className="h-6">
+                                    <td className="border border-black p-1 bg-gray-50">{pct(report.visitsMorning || 0, totalTiming)}</td>
+                                    <td className="border border-black p-1 bg-gray-50">{pct(report.visitsEvening || 0, totalTiming)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
-                {/* Table 3: Ranks */}
+                {/* Table 4: Ranks */}
                 <div>
                     <h3 className="font-bold text-[11px] mb-1 text-right underline">* توزيع الزيارات حسب الرتب لكل المواد</h3>
                     <table className="w-full border-collapse border border-black text-center text-[10px]">
@@ -179,7 +208,7 @@ const PrintableQuarterlyReport: React.FC<PrintableQuarterlyReportProps> = ({ rep
                     </table>
                 </div>
 
-                {/* Table 4: Levels */}
+                {/* Table 5: Levels */}
                 <div>
                     <h3 className="font-bold text-[11px] mb-1 text-right underline">* توزيع الزيارات التفتيشية والتوجيهية ... حسب المستويات لكل المواد</h3>
                     <table className="w-full border-collapse border border-black text-center text-[10px]">
@@ -217,7 +246,7 @@ const PrintableQuarterlyReport: React.FC<PrintableQuarterlyReportProps> = ({ rep
                     </table>
                 </div>
 
-                {/* Table 5: Subjects */}
+                {/* Table 6: Subjects */}
                 <div>
                     <h3 className="font-bold text-[11px] mb-1 text-right underline">* توزيع الزيارات على المواد</h3>
                     <table className="w-full border-collapse border border-black text-center text-[10px]">
@@ -269,7 +298,7 @@ const PrintableQuarterlyReport: React.FC<PrintableQuarterlyReportProps> = ({ rep
                     <p className="mb-12 underline">مفتش التعليم الابتدائي</p>
                     
                     {/* Signature Container - Overlaid and Realistic */}
-                    {signature ? (
+                    {signature && (
                         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 w-48 h-32 flex items-center justify-center pointer-events-none z-10">
                             <img 
                                 src={signature} 
@@ -277,11 +306,8 @@ const PrintableQuarterlyReport: React.FC<PrintableQuarterlyReportProps> = ({ rep
                                 className="w-full h-full object-contain mix-blend-multiply transform -rotate-6 scale-150 opacity-90" 
                             />
                         </div>
-                    ) : (
-                        <div className="mt-2 text-[8px] text-gray-300 border border-dashed border-gray-300 w-16 h-16 rounded-full flex items-center justify-center rotate-[-15deg]">
-                            الختم
-                        </div>
                     )}
+                    {/* Dashed circle removed as requested */}
                  </div>
             </div>
 

@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { AcqClassRecord, AcqGlobalRecord, AcqGlobalStudent } from '../../types/acquisitions';
 import { YEAR2_ARABIC_DEF } from '../../constants/acqYear2Arabic';
@@ -105,6 +106,13 @@ const AcqResultsTable: React.FC<Props> = ({ mode = 'detailed', records = [], glo
         }
     };
 
+    // Helper for Arabic Display
+    const displayGrade = (grade: string | null | undefined) => {
+        if (!grade) return '-';
+        const map: Record<string, string> = { 'A': 'أ', 'B': 'ب', 'C': 'ج', 'D': 'د' };
+        return map[grade] || grade;
+    };
+
     // --- RENDER: DETAILED VIEW ---
     if (mode === 'detailed') {
         if (!level || !subject) {
@@ -205,9 +213,9 @@ const AcqResultsTable: React.FC<Props> = ({ mode = 'detailed', records = [], glo
                                             return (
                                                 <td 
                                                     key={`${student.id}-${comp.id}-${crit.id}`}
-                                                    className={`p-2 text-center border-l border-slate-100 text-xs ${getCellClass(grade)}`}
+                                                    className={`p-2 text-center border-l border-slate-100 text-xs font-serif ${getCellClass(grade)}`}
                                                 >
-                                                    {grade || '-'}
+                                                    {displayGrade(grade)}
                                                 </td>
                                             );
                                         })
@@ -267,8 +275,8 @@ const AcqResultsTable: React.FC<Props> = ({ mode = 'detailed', records = [], glo
                                     {globalSubjects.map(subj => {
                                         const grade = student.subjects[subj];
                                         return (
-                                            <td key={subj} className={`p-2 text-center border-l border-slate-100 font-bold ${getCellClass(grade)}`}>
-                                                {grade || '-'}
+                                            <td key={subj} className={`p-2 text-center border-l border-slate-100 font-bold font-serif ${getCellClass(grade)}`}>
+                                                {displayGrade(grade)}
                                             </td>
                                         );
                                     })}

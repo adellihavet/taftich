@@ -1,10 +1,10 @@
-
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Printer, ArrowRight, User, Calendar, FileText, School } from 'lucide-react';
+import { Printer, ArrowRight, User, Calendar, FileText, School, Lock } from 'lucide-react';
 import { Teacher, ReportData, TenureReportData } from '../types';
 import VoiceInput from './VoiceInput';
 import VoiceTextarea from './VoiceTextarea';
+import { addMailRecord } from '../services/mailStorage';
 
 interface TenureExamNotificationProps {
     teachers: Teacher[];
@@ -14,10 +14,13 @@ interface TenureExamNotificationProps {
     district: string;
     onBack: () => void;
     signature?: string; // Added prop
+    isExpired?: boolean;
+    onUpgradeClick?: () => void;
 }
 
 const TenureExamNotification: React.FC<TenureExamNotificationProps> = ({ 
-    teachers, reportsMap, inspectorName, wilaya, district, onBack, signature
+    teachers, reportsMap, inspectorName, wilaya, district, onBack, signature,
+    isExpired = false, onUpgradeClick
 }) => {
     // --- STATE ---
     const [selectedTeacherId, setSelectedTeacherId] = useState<string>('');
@@ -40,7 +43,19 @@ const TenureExamNotification: React.FC<TenureExamNotificationProps> = ({
     }, [traineeTeachers, selectedTeacherId]);
 
     const handlePrint = () => {
-        window.print();
+        if (isExpired && onUpgradeClick) {
+            onUpgradeClick();
+        } else {
+            window.print();
+            // Auto Archive (With No Number)
+            if (confirm("هل تريد حفظ الإشعار في سجل الصادر (بدون رقم)؟")) {
+                const recipient = selectedTeacher ? `الأستاذ ${selectedTeacher.fullName} (مدرسة ${selectedTeacher.schoolName})` : 'أستاذ متربص';
+                const subject = "إشعار باجتياز امتحان التثبيت";
+                // Force IsNoNumber = true
+                addMailRecord('outgoing', recipient, subject, true);
+                alert("تم الحفظ.");
+            }
+        }
     };
 
     // --- PAPER CONTENT (Shared) ---
@@ -182,7 +197,7 @@ const TenureExamNotification: React.FC<TenureExamNotificationProps> = ({
                     </div>
 
                     <button onClick={handlePrint} disabled={!selectedTeacherId} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mt-auto">
-                        <Printer size={18} /> طباعة الإشعار
+                        {isExpired ? <Lock size={18} /> : <Printer size={18} />} طباعة الإشعار
                     </button>
                 </div>
             </div>

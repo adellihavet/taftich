@@ -3,12 +3,14 @@
  * خدمة الاتصال بـ Google Sheets عبر Apps Script Web App
  */
 
+export type SheetAction = 'SYNC_MAIN' | 'READ_MAIN' | 'SYNC_ACQ' | 'READ_ACQ' | 'SYNC_MAIL' | 'READ_MAIL' | 'SYNC_SEMINARS' | 'READ_SEMINARS';
+
 // إرسال البيانات (مزامنة/حفظ)
-export const syncWithScript = async (scriptUrl: string, data: any): Promise<any> => {
+export const syncWithScript = async (scriptUrl: string, data: any, action: SheetAction = 'SYNC_MAIN'): Promise<any> => {
     if (!scriptUrl) throw new Error("رابط السكريبت غير موجود");
 
     const payload = JSON.stringify({
-        action: 'SYNC',
+        action: action,
         data: data
     });
 
@@ -22,6 +24,8 @@ export const syncWithScript = async (scriptUrl: string, data: any): Promise<any>
             body: payload
         });
 
+        // with no-cors, we can't check response.ok or get JSON
+        // but it means request was sent.
         return { success: true };
     } catch (error) {
         console.error("فشل الاتصال بالسكربت:", error);
@@ -30,11 +34,11 @@ export const syncWithScript = async (scriptUrl: string, data: any): Promise<any>
 };
 
 // قراءة البيانات (استرجاع)
-export const readFromScript = async (scriptUrl: string): Promise<any> => {
+export const readFromScript = async (scriptUrl: string, action: SheetAction = 'READ_MAIN'): Promise<any> => {
     if (!scriptUrl) throw new Error("رابط السكريبت غير موجود");
 
     try {
-        const response = await fetch(`${scriptUrl}?action=READ`, {
+        const response = await fetch(`${scriptUrl}?action=${action}`, {
             method: 'GET',
         });
 
@@ -48,8 +52,4 @@ export const readFromScript = async (scriptUrl: string): Promise<any> => {
         console.error("فشل القراءة من السكربت:", error);
         throw new Error("تعذر جلب البيانات. تأكد أن السكريبت منشور بصلاحية 'Anyone' (أي شخص).");
     }
-};
-
-export const openSheetFromUrl = (scriptUrl: string) => {
-    alert("يرجى فتح ملف Google Sheet يدوياً من حسابك في Google Drive.");
 };

@@ -19,48 +19,61 @@ import SeminarsManager from './components/SeminarsManager';
 import AdministrativeAssistant from './components/AdministrativeAssistant'; 
 import BrandingKit from './components/BrandingKit';
 import Auth from './components/Auth';
+import AdminDashboard from './components/Admin/AdminDashboard';
+import OnboardingModal from './components/OnboardingModal';
+import SettingsModal from './components/SettingsModal';
 import { supabase, isSupabaseConfigured, fetchScriptUrlFromCloud } from './services/supabaseService';
-import { Teacher, ReportData, TenureReportData, QuarterlyReportData, AppView, LibraryLink } from './types';
+import { Teacher, ReportData, TenureReportData, QuarterlyReportData, AppView, InspectorProfile } from './types';
 import { AcqFilterState } from './types/acquisitions';
 import { MOCK_TEACHERS, INITIAL_REPORT_STATE, INITIAL_TENURE_REPORT_STATE, INITIAL_QUARTERLY_REPORT_STATE } from './constants';
-import { Database, LayoutDashboard, ArrowUpCircle, PenLine, LogOut, UserCircle2, Hexagon, PieChart, Cloud, RefreshCcw, AlertCircle, BarChart2, Presentation, Briefcase, Menu, X, Stamp, Users, List, BarChart3, Image as ImageIcon } from 'lucide-react';
+import { Database, LayoutDashboard, ArrowUpCircle, LogOut, UserCircle2, Hexagon, PieChart, Cloud, RefreshCcw, AlertCircle, BarChart2, Presentation, Briefcase, Menu, X, Users, BarChart3, Image as ImageIcon, Crown, Clock, ShieldAlert, Settings } from 'lucide-react';
 import { syncWithScript, readFromScript } from './services/sheetsService';
 import { generateDatabaseRows, parseDatabaseRows } from './utils/sheetHelper';
-import { generateDatabaseRows as generateRows } from './utils/sheetHelper'; // Fallback import fix
 import { getAcqDB } from './services/acqStorage';
+import { usePermissions } from './hooks/usePermissions';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
+
+// --- CONFIG: ADMIN EMAILS ---
+const ADMIN_EMAILS = ['dellihakamal@gmail.com', 'mufattish.admin@education.dz']; 
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [loadingSession, setLoadingSession] = useState(true);
+
+  // --- PERMISSIONS HOOK (SYSTEM GUARD) ---
+  const { 
+      isGold, isTrial, isActive, status: subStatus, daysLeft, 
+      canPrint, refetch: refetchProfile 
+  } = usePermissions();
+
+  const [showUpgradeModal, setShowUpgradeModal] = useState<boolean>(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   // Mobile Menu State
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // --- PERSISTENCE: View & Selection ---
   const [view, setView] = useState<AppView>(() => {
-      // Restore last view from local storage or default to DASHBOARD
       return (localStorage.getItem('mufattish_last_view') as AppView) || AppView.DASHBOARD;
   });
   
-  // Dashboard Tab State (Stats vs List)
   const [dashboardTab, setDashboardTab] = useState<'stats' | 'list'>('stats');
-
   const [teachers, setTeachers] = useState<Teacher[]>(MOCK_TEACHERS);
-  
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(() => {
-      // Restore selected teacher ID
       return localStorage.getItem('mufattish_last_teacher_id') || '';
   });
   
   const [previewTeacher, setPreviewTeacher] = useState<Teacher | null>(null);
-
-  const [inspectorName, setInspectorName] = useState('');
-  const [isEditingInspector, setIsEditingInspector] = useState(false);
-  const [signature, setSignature] = useState<string | undefined>(undefined);
-  // NEW: Global Toggle for Signature Visibility (Restored)
-  const [showSignature, setShowSignature] = useState<boolean>(true);
+  
+  // INSPECTOR PROFILE STATE
+  const [inspectorProfile, setInspectorProfile] = useState<InspectorProfile>({
+      fullName: '',
+      wilaya: '',
+      district: '',
+      showSignature: true
+  });
 
   const [currentReport, setCurrentReport] = useState<ReportData>(INITIAL_REPORT_STATE);
   const [reportsMap, setReportsMap] = useState<Record<string, ReportData>>({});
@@ -70,10 +83,6 @@ const App: React.FC = () => {
 
   const [currentQuarterlyReport, setCurrentQuarterlyReport] = useState<QuarterlyReportData>(INITIAL_QUARTERLY_REPORT_STATE);
   
-  const [isGoldMember, setIsGoldMember] = useState<boolean>(false);
-  const [showUpgradeModal, setShowUpgradeModal] = useState<boolean>(false);
-
-  // --- ACQUISITION FILTER STATE ---
   const [acqFilters, setAcqFilters] = useState<AcqFilterState>({
       scope: 'district',
       selectedSchool: '',
@@ -84,7 +93,6 @@ const App: React.FC = () => {
   
   const [acqRefreshKey, setAcqRefreshKey] = useState(0); 
 
-  // --- GOOGLE SYNC STATE ---
   const [isGoogleConnected, setIsGoogleConnected] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [syncMessage, setSyncMessage] = useState('');
@@ -93,6 +101,50 @@ const App: React.FC = () => {
 
   const [filterSchool, setFilterSchool] = useState<string>('');
   const [filterLevel, setFilterLevel] = useState<string>('');
+  
+  // --- New State for Linking Dashboard to Seminars ---
+  const [pendingSeminarTopic, setPendingSeminarTopic] = useState<string | null>(null);
+
+  // Load Inspector Profile from LS
+  useEffect(() => {
+      const savedProfile = localStorage.getItem('mufattish_inspector_profile');
+      if (savedProfile) {
+          try {
+              setInspectorProfile(JSON.parse(savedProfile));
+          } catch (e) {
+              setShowOnboarding(true);
+          }
+      } else {
+          setShowOnboarding(true);
+      }
+  }, []);
+
+  const handleSaveProfile = (profile: InspectorProfile) => {
+      setInspectorProfile(profile);
+      localStorage.setItem('mufattish_inspector_profile', JSON.stringify(profile));
+      setShowOnboarding(false);
+  };
+
+  const derivedGlobalData = useMemo(() => {
+      let d = inspectorProfile.district || currentReport.district;
+      let w = inspectorProfile.wilaya || currentReport.wilaya;
+      
+      if (!d || d.trim() === '') {
+          const reportWithDistrict = Object.values(reportsMap).find((r: ReportData) => r.district && r.district.trim() !== '');
+          if (reportWithDistrict) d = reportWithDistrict.district;
+      }
+      if (!w || w === 'الأغواط') {
+          const reportWithWilaya = Object.values(reportsMap).find((r: ReportData) => r.wilaya && r.wilaya.trim() !== '' && r.wilaya !== 'الأغواط');
+          if (reportWithWilaya) w = reportWithWilaya.wilaya;
+      }
+      return { district: d || '', wilaya: w || 'الأغواط' };
+  }, [currentReport, reportsMap, inspectorProfile]);
+
+  // Check Admin Status
+  const isAdmin = useMemo(() => {
+      if (!session || !session.user || !session.user.email) return false;
+      return ADMIN_EMAILS.includes(session.user.email);
+  }, [session]);
 
   const availableSchools = useMemo(() => {
       const schools = new Set<string>();
@@ -100,22 +152,15 @@ const App: React.FC = () => {
       return Array.from(schools).sort();
   }, [reportsMap]);
 
-  // COMBINED SCHOOLS LIST FOR ACQUISITIONS (Main DB + Acq Records)
   const acqAvailableSchools = useMemo(() => {
       const schools = new Set<string>();
-      
-      // 1. Add schools from existing Acquisition records
       const db = getAcqDB();
       db.records.forEach(r => schools.add(r.schoolName));
-
-      // 2. Add schools from the Main Database (Reports Map)
-      // This ensures the dropdown includes all schools defined in the Google Sheet / Database
       Object.values(reportsMap).forEach((r: ReportData) => { 
           if(r.school && r.school.trim() !== '') {
               schools.add(r.school.trim()); 
           }
       });
-
       return Array.from(schools).sort();
   }, [acqRefreshKey, view, reportsMap]); 
 
@@ -134,52 +179,17 @@ const App: React.FC = () => {
       });
   }, [teachers, reportsMap, filterSchool, filterLevel]);
 
-  // --- INTELLIGENT GLOBAL SETTINGS EXTRACTION ---
-  const derivedGlobalData = useMemo(() => {
-      let d = currentReport.district;
-      let w = currentReport.wilaya;
-
-      // If current report has no district (default state), try to find it in previous reports
-      if (!d || d.trim() === '') {
-          const reportWithDistrict = Object.values(reportsMap).find((r: ReportData) => r.district && r.district.trim() !== '');
-          if (reportWithDistrict) d = reportWithDistrict.district;
-      }
-
-      // Same for Wilaya, ignoring default 'الأغواط' if a better one exists
-      if (!w || w === 'الأغواط') {
-          const reportWithWilaya = Object.values(reportsMap).find((r: ReportData) => r.wilaya && r.wilaya.trim() !== '' && r.wilaya !== 'الأغواط');
-          if (reportWithWilaya) w = reportWithWilaya.wilaya;
-      }
-
-      return { 
-          district: d || '', 
-          wilaya: w || 'الأغواط' 
-      };
-  }, [currentReport, reportsMap]);
-
-  // --- AUTOMATIC RECORD UPDATE (The 15-Day Rule) ---
+  // Sync Inspection Data to Teacher List
   useEffect(() => {
       const today = new Date();
       let updatedCount = 0;
-      
       const newTeachers = teachers.map(t => {
           const report = reportsMap[t.id];
-          
-          // Logic: Only update teacher's profile if:
-          // 1. Report exists and has a date
-          // 2. Report has a valid final mark (> 0)
-          // 3. The inspection date is OLDER than 15 days from today
-          
           if (report && report.inspectionDate && report.finalMark > 0) {
               const reportDate = new Date(report.inspectionDate);
-              
               if (!isNaN(reportDate.getTime())) {
-                  // Calculate diff in days
                   const diffTime = today.getTime() - reportDate.getTime();
                   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-
-                  // CRITICAL FIX: Only update if the report is older than 15 days
-                  // This prevents the "Last Mark" from changing to "1" while drafting a new report.
                   if (diffDays > 15 && t.lastInspectionDate !== report.inspectionDate) {
                       updatedCount++;
                       return {
@@ -192,30 +202,24 @@ const App: React.FC = () => {
           }
           return t;
       });
-
       if (updatedCount > 0) {
           setTeachers(newTeachers);
-          console.log(`Updated ${updatedCount} teacher records automatically (15-day rule applied).`);
       }
   }, [reportsMap]); 
 
-  // --- INITIALIZATION & PERSISTENCE ---
+  // Auth & Cloud Script Sync
   useEffect(() => {
-    // 1. Supabase / Auth Init
     if (isSupabaseConfigured() && supabase) {
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session);
             setLoadingSession(false);
-            
-            if (session?.user) {
-                if (typeof fetchScriptUrlFromCloud === 'function') {
-                    fetchScriptUrlFromCloud().then(url => {
-                        if (url) {
-                            localStorage.setItem('mufattish_script_url', url);
-                            setIsGoogleConnected(true);
-                        }
-                    });
-                }
+            if (session?.user && typeof fetchScriptUrlFromCloud === 'function') {
+                fetchScriptUrlFromCloud().then(url => {
+                    if (url) {
+                        localStorage.setItem('mufattish_script_url', url);
+                        setIsGoogleConnected(true);
+                    }
+                });
             }
         }).catch((err: any) => {
             console.error("Session check failed:", err);
@@ -225,17 +229,6 @@ const App: React.FC = () => {
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
             setSession(session);
             setLoadingSession(false);
-            
-            if (session?.user) {
-                if (typeof fetchScriptUrlFromCloud === 'function') {
-                    fetchScriptUrlFromCloud().then(url => {
-                        if (url) {
-                            localStorage.setItem('mufattish_script_url', url);
-                            setIsGoogleConnected(true);
-                        }
-                    });
-                }
-            }
         });
 
         return () => subscription.unsubscribe();
@@ -244,38 +237,24 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // --- LOCAL STORAGE LOAD ---
+  // Local Storage Restoration
   useEffect(() => {
     const savedTeachers = localStorage.getItem('mufattish_teachers');
     const savedReports = localStorage.getItem('mufattish_reports_map'); 
     const savedTenureReports = localStorage.getItem('mufattish_tenure_reports_map');
     const savedQuarterlyReport = localStorage.getItem('mufattish_quarterly_report');
-    const savedMembership = localStorage.getItem('mufattish_is_gold');
-    const savedInspectorName = localStorage.getItem('mufattish_inspector_name');
-    const savedSignature = localStorage.getItem('mufattish_signature');
-    const savedShowSignature = localStorage.getItem('mufattish_show_signature');
 
     if (savedTeachers) try { setTeachers(JSON.parse(savedTeachers)); } catch(e) {}
     if (savedReports) try { setReportsMap(JSON.parse(savedReports)); } catch(e) {}
     if (savedTenureReports) try { setTenureReportsMap(JSON.parse(savedTenureReports)); } catch(e) {}
     if (savedQuarterlyReport) try { setCurrentQuarterlyReport(JSON.parse(savedQuarterlyReport)); } catch(e) {}
-    if (savedMembership === 'true') setIsGoldMember(true);
-    if (savedInspectorName) setInspectorName(savedInspectorName);
-    if (savedSignature) setSignature(savedSignature);
-    // Restore the toggle state (default to true if not found)
-    if (savedShowSignature !== null) setShowSignature(savedShowSignature === 'true');
 
     const scriptUrl = localStorage.getItem('mufattish_script_url');
     if (scriptUrl) {
         setIsGoogleConnected(true);
-        
-        // --- AUTO-RESTORE LOGIC ---
-        // If local data is empty but we have a script URL, try to fetch silently
         if (!savedTeachers || savedTeachers === '[]') {
-            console.log("Local data empty, attempting auto-restore from cloud...");
             setSyncStatus('syncing');
             setSyncMessage('جاري استرجاع البيانات تلقائياً...');
-            
             readFromScript(scriptUrl).then(data => {
                 if (Array.isArray(data)) {
                     const { teachers: newTeachers, reportsMap: parsedReports } = parseDatabaseRows(data);
@@ -286,11 +265,10 @@ const App: React.FC = () => {
                         setSyncMessage('تم استرجاع البيانات');
                         setTimeout(() => setSyncStatus('idle'), 3000);
                     } else {
-                        setSyncStatus('idle'); // Just idle if remote is also empty
+                        setSyncStatus('idle');
                     }
                 }
             }).catch(err => {
-                console.error("Auto restore failed:", err);
                 setSyncStatus('error');
                 setSyncMessage('فشل الاسترجاع التلقائي');
             });
@@ -298,59 +276,44 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // --- LOCAL STORAGE SAVE & VIEW PERSISTENCE ---
+  // Persist State
   useEffect(() => { localStorage.setItem('mufattish_teachers', JSON.stringify(teachers)); }, [teachers]);
   useEffect(() => { localStorage.setItem('mufattish_reports_map', JSON.stringify(reportsMap)); }, [reportsMap]);
   useEffect(() => { localStorage.setItem('mufattish_tenure_reports_map', JSON.stringify(tenureReportsMap)); }, [tenureReportsMap]);
   useEffect(() => { localStorage.setItem('mufattish_quarterly_report', JSON.stringify(currentQuarterlyReport)); }, [currentQuarterlyReport]);
-  useEffect(() => { localStorage.setItem('mufattish_is_gold', isGoldMember.toString()); }, [isGoldMember]);
-  useEffect(() => { localStorage.setItem('mufattish_inspector_name', inspectorName); }, [inspectorName]);
-  // Save toggle state
-  useEffect(() => { localStorage.setItem('mufattish_show_signature', String(showSignature)); }, [showSignature]);
-  
-  // Save View & Selected Teacher
   useEffect(() => { if (view) localStorage.setItem('mufattish_last_view', view); }, [view]);
   useEffect(() => { localStorage.setItem('mufattish_last_teacher_id', selectedTeacherId); }, [selectedTeacherId]);
 
-  // --- GOOGLE SYNC LOGIC (Push) ---
+  // Auto Sync Logic
   useEffect(() => {
       if (isFirstMount.current) {
           isFirstMount.current = false;
           return;
       }
-
       if (!autoSyncEnabled || !isGoogleConnected || teachers.length === 0) return;
-
       const scriptUrl = localStorage.getItem('mufattish_script_url');
       if (!scriptUrl) return;
-
       setSyncStatus('syncing');
-      
-      // Increased debounce time to 5 seconds to reduce API calls
       const timer = setTimeout(async () => {
           try {
-              // Safety check: Don't sync if data looks dangerously empty
               if (teachers.length === 0) {
-                  console.warn("Skipping auto-sync: Teacher list is empty.");
                   setSyncStatus('idle');
                   return;
               }
-
-              const data = generateDatabaseRows(teachers, currentReport, reportsMap);
-              await syncWithScript(scriptUrl, data);
+              const data = generateDatabaseRows(teachers, currentReport, reportsMap, inspectorProfile);
+              await syncWithScript(scriptUrl, data, 'SYNC_MAIN');
               setSyncStatus('success');
               setSyncMessage('تم الحفظ في Google Sheets');
               setTimeout(() => setSyncStatus('idle'), 3000);
           } catch (error: any) {
-              console.error("Sync Error:", error);
               setSyncStatus('error');
               setSyncMessage('فشل المزامنة - يرجى الحفظ يدوياً');
           }
       }, 5000);
-
       return () => clearTimeout(timer);
-  }, [teachers, reportsMap, tenureReportsMap, autoSyncEnabled, isGoogleConnected]);
+  }, [teachers, reportsMap, tenureReportsMap, autoSyncEnabled, isGoogleConnected, inspectorProfile]);
 
+  // Handlers
   const handleSelectTeacher = (teacher: Teacher) => {
     setPreviewTeacher(teacher);
   };
@@ -365,13 +328,12 @@ const App: React.FC = () => {
   const initReport = (teacher: Teacher, type: 'modern' | 'legacy') => {
       setPreviewTeacher(null);
       setSelectedTeacherId(teacher.id);
-
       if (reportsMap[teacher.id]) {
           const existing = reportsMap[teacher.id];
           setCurrentReport({ 
               ...existing, 
               reportModel: type,
-              inspectorName: existing.inspectorName || inspectorName 
+              inspectorName: existing.inspectorName || inspectorProfile.fullName
           });
       } else {
           const newReport = {
@@ -379,10 +341,10 @@ const App: React.FC = () => {
               id: generateId(),
               teacherId: teacher.id,
               reportModel: type,
-              wilaya: currentReport.wilaya || derivedGlobalData.wilaya, 
+              wilaya: currentReport.wilaya || inspectorProfile.wilaya || derivedGlobalData.wilaya,
               school: currentReport.school || '',
-              district: currentReport.district || derivedGlobalData.district,
-              inspectorName: inspectorName
+              district: currentReport.district || inspectorProfile.district || derivedGlobalData.district,
+              inspectorName: inspectorProfile.fullName
           };
           setCurrentReport(newReport);
           setReportsMap(prev => ({ ...prev, [teacher.id]: newReport }));
@@ -402,22 +364,21 @@ const App: React.FC = () => {
   const handleStartTenure = (teacher: Teacher) => {
       setPreviewTeacher(null);
       setSelectedTeacherId(teacher.id);
-
       if (tenureReportsMap[teacher.id]) {
           const existing = tenureReportsMap[teacher.id];
            setCurrentTenureReport({
               ...existing,
-              inspectorName: existing.inspectorName || inspectorName
+              inspectorName: existing.inspectorName || inspectorProfile.fullName
            });
       } else {
           const newTenure = {
               ...INITIAL_TENURE_REPORT_STATE,
               id: generateId(),
               teacherId: teacher.id,
-              wilaya: currentReport.wilaya || derivedGlobalData.wilaya, 
-              district: currentReport.district || derivedGlobalData.district, 
+              wilaya: currentReport.wilaya || inspectorProfile.wilaya || derivedGlobalData.wilaya, 
+              district: currentReport.district || inspectorProfile.district || derivedGlobalData.district, 
               school: currentReport.school || '',
-              inspectorName: inspectorName
+              inspectorName: inspectorProfile.fullName
           };
           setCurrentTenureReport(newTenure);
           setTenureReportsMap(prev => ({...prev, [teacher.id]: newTenure}));
@@ -428,9 +389,9 @@ const App: React.FC = () => {
   const handleOpenQuarterlyReport = () => {
       setCurrentQuarterlyReport(prev => ({
           ...prev,
-          inspectorName: inspectorName, 
-          wilaya: derivedGlobalData.wilaya, 
-          district: derivedGlobalData.district, 
+          inspectorName: inspectorProfile.fullName, 
+          wilaya: inspectorProfile.wilaya || derivedGlobalData.wilaya, 
+          district: inspectorProfile.district || derivedGlobalData.district, 
           teachersTotal: teachers.length,
           teachersTrainee: teachers.filter(t => t.status === 'stagiere').length,
       }));
@@ -459,11 +420,17 @@ const App: React.FC = () => {
   };
 
   const handleDeleteTeacher = async (id: string) => {
-      if (window.confirm("هل أنت متأكد من حذف هذا الأستاذ؟")) {
+      if (window.confirm("هل أنت متأكد من حذف هذا الأستاذ؟ سيتم حذف جميع تقاريره (تفتيش وتثبيت).")) {
           setTeachers(prev => prev.filter(t => t.id !== id));
+          
+          // CRITICAL FIX: Clean up ALL reports associated with this teacher
           const newReports = { ...reportsMap };
           delete newReports[id];
           setReportsMap(newReports);
+
+          const newTenureReports = { ...tenureReportsMap };
+          delete newTenureReports[id];
+          setTenureReportsMap(newTenureReports);
           
           if (selectedTeacherId === id) {
               setSelectedTeacherId('');
@@ -499,60 +466,39 @@ const App: React.FC = () => {
   const handleFullImport = async (importedTeachers: Teacher[], importedReports: Record<string, ReportData>) => {
       const newTeachers = [...teachers];
       const newReportsMap = { ...reportsMap };
-      
-      const defaultWilaya = currentReport.wilaya || derivedGlobalData.wilaya; 
-      const defaultDistrict = currentReport.district || derivedGlobalData.district;
+      const defaultWilaya = inspectorProfile.wilaya || currentReport.wilaya || derivedGlobalData.wilaya; 
+      const defaultDistrict = inspectorProfile.district || currentReport.district || derivedGlobalData.district;
 
       importedTeachers.forEach(t => {
           const normalizedImportName = t.fullName.trim().toLowerCase();
-          const existingTeacherIdx = newTeachers.findIndex(existing => existing.fullName.trim().toLowerCase() === normalizedImportName);
           
-          if (existingTeacherIdx >= 0) {
-              const existingTeacher = newTeachers[existingTeacherIdx];
-              newTeachers[existingTeacherIdx] = {
-                  ...existingTeacher,
-                  birthDate: t.birthDate || existingTeacher.birthDate,
-                  birthPlace: t.birthPlace || existingTeacher.birthPlace,
-                  degree: t.degree || existingTeacher.degree,
-                  degreeDate: t.degreeDate || existingTeacher.degreeDate,
-                  recruitmentDate: t.recruitmentDate || existingTeacher.recruitmentDate,
-                  rank: t.rank || existingTeacher.rank,
-                  currentRankDate: t.currentRankDate || existingTeacher.currentRankDate,
-                  echelon: t.echelon || existingTeacher.echelon,
-                  echelonDate: t.echelonDate || existingTeacher.echelonDate,
-                  lastInspectionDate: t.lastInspectionDate || existingTeacher.lastInspectionDate,
-                  lastMark: t.lastMark || existingTeacher.lastMark,
-                  status: t.status || existingTeacher.status
-              };
+          // SMART MATCH: Match by Name AND BirthDate (if available) to avoid collisions
+          const existingTeacherIdx = newTeachers.findIndex(existing => {
+              const nameMatch = existing.fullName.trim().toLowerCase() === normalizedImportName;
+              // If both have birthdates, check them. If one is missing, rely on name but warn in console.
+              if (nameMatch && t.birthDate && existing.birthDate) {
+                  return t.birthDate === existing.birthDate;
+              }
+              return nameMatch;
+          });
 
+          if (existingTeacherIdx >= 0) {
+              // Update existing
+              const existingTeacher = newTeachers[existingTeacherIdx];
+              newTeachers[existingTeacherIdx] = { ...existingTeacher, ...t }; 
               const importedReport = importedReports[t.id];
               if (importedReport) {
                   const existingReport = newReportsMap[existingTeacher.id] || { ...INITIAL_REPORT_STATE, id: generateId(), teacherId: existingTeacher.id };
-                  newReportsMap[existingTeacher.id] = {
-                      ...existingReport,
-                      school: importedReport.school || existingReport.school,
-                      level: importedReport.level || existingReport.level,
-                      wilaya: existingReport.wilaya || defaultWilaya,
-                      district: existingReport.district || defaultDistrict
-                  };
+                  newReportsMap[existingTeacher.id] = { ...existingReport, ...importedReport, wilaya: existingReport.wilaya || defaultWilaya, district: existingReport.district || defaultDistrict };
               }
           } else {
+              // Add new
               newTeachers.push(t);
               const importedReport = importedReports[t.id];
               if (importedReport) {
-                  newReportsMap[t.id] = {
-                      ...importedReport,
-                      wilaya: defaultWilaya,
-                      district: defaultDistrict
-                  };
+                  newReportsMap[t.id] = { ...importedReport, wilaya: defaultWilaya, district: defaultDistrict };
               } else {
-                  newReportsMap[t.id] = {
-                      ...INITIAL_REPORT_STATE,
-                      id: generateId(),
-                      teacherId: t.id,
-                      wilaya: defaultWilaya,
-                      district: defaultDistrict
-                  };
+                  newReportsMap[t.id] = { ...INITIAL_REPORT_STATE, id: generateId(), teacherId: t.id, wilaya: defaultWilaya, district: defaultDistrict };
               }
           }
       });
@@ -565,19 +511,17 @@ const App: React.FC = () => {
           setSyncStatus('syncing');
           setSyncMessage('جاري إرسال البيانات الجديدة إلى Google Sheet...');
           try {
-              const data = generateDatabaseRows(newTeachers, currentReport, newReportsMap);
-              await syncWithScript(scriptUrl, data);
+              const data = generateDatabaseRows(newTeachers, currentReport, newReportsMap, inspectorProfile);
+              await syncWithScript(scriptUrl, data, 'SYNC_MAIN');
               setSyncStatus('success');
               setSyncMessage('تمت إضافة البيانات للملف ومزامنتها بنجاح.');
               setTimeout(() => setSyncStatus('idle'), 3000);
           } catch (error) {
-              console.error("Manual Sync Failed:", error);
               setSyncStatus('error');
               setSyncMessage('فشلت المزامنة التلقائية، يرجى المحاولة من لوحة البيانات.');
           }
       }
-
-      alert(`تم استيراد ${importedTeachers.length} أستاذ بنجاح.`);
+      alert(`تم معالجة ${importedTeachers.length} أستاذ بنجاح.`);
   };
   
   const handleRestoreBackup = (
@@ -590,19 +534,11 @@ const App: React.FC = () => {
       setTenureReportsMap(restoredTenure);
       alert('تم استرجاع قاعدة البيانات بنجاح.');
   };
-
-  const handleSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const base64String = reader.result as string;
-            setSignature(base64String);
-            setShowSignature(true); // Auto-enable on new upload
-            localStorage.setItem('mufattish_signature', base64String);
-        };
-        reader.readAsDataURL(file);
-    }
+  
+  // --- Feature: Program Seminar from Dashboard ---
+  const handleProgramSeminar = (topic: string) => {
+      setPendingSeminarTopic(topic);
+      setView(AppView.SEMINARS);
   };
 
   const NavButton = ({ targetView, icon: Icon, label }: { targetView: AppView, icon: any, label: string }) => (
@@ -620,8 +556,7 @@ const App: React.FC = () => {
       </button>
   );
 
-  // --- EFFECTIVE SIGNATURE (Conditionally passed to prints) ---
-  const effectiveSignature = showSignature ? signature : undefined;
+  const effectiveSignature = inspectorProfile.showSignature ? inspectorProfile.signatureUrl : undefined;
 
   if (loadingSession) {
       return (
@@ -640,14 +575,21 @@ const App: React.FC = () => {
   }
 
   const selectedTeacher = teachers.find(t => t.id === selectedTeacherId);
-  const userFullName = session.user?.user_metadata?.full_name || session.user?.email?.split('@')[0] || 'مستخدم';
-
   const isEditorView = view === AppView.EDITOR || view === AppView.LEGACY_EDITOR || view === AppView.TENURE_EDITOR;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 text-gray-900 font-sans p-0 md:p-3 lg:p-4 overflow-hidden h-screen flex flex-col">
       <div className="print:hidden">
-        <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} onUpgrade={() => {setIsGoldMember(true); setShowUpgradeModal(false); alert("مبروك! تم تفعيل العضوية الذهبية بنجاح.");}} />
+        {/* MODALS */}
+        {showOnboarding && <OnboardingModal onSave={handleSaveProfile} />}
+        {showSettings && <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} profile={inspectorProfile} onSaveProfile={handleSaveProfile} />}
+        
+        <UpgradeModal 
+            isOpen={showUpgradeModal} 
+            onClose={() => setShowUpgradeModal(false)} 
+            onUpgrade={() => { refetchProfile(); setShowUpgradeModal(false); }} 
+            userStatus={subStatus}
+        />
         <TeacherDrawer 
             teacher={previewTeacher} 
             isOpen={!!previewTeacher} 
@@ -659,7 +601,6 @@ const App: React.FC = () => {
         />
       </div>
       
-      {/* Printable Views (Hidden on Screen) - Using EFFECTIVE SIGNATURE */}
       <div className="hidden print:block">
         {selectedTeacher && view === AppView.EDITOR && <PrintableReport report={currentReport} teacher={selectedTeacher} signature={effectiveSignature} />}
         {selectedTeacher && view === AppView.LEGACY_EDITOR && <PrintableLegacyReport report={currentReport} teacher={selectedTeacher} signature={effectiveSignature} />}
@@ -668,7 +609,7 @@ const App: React.FC = () => {
         {view === AppView.QUARTERLY_REPORT && <PrintableQuarterlyReport report={currentQuarterlyReport} signature={effectiveSignature} />}
       </div>
 
-      {/* Mobile Header (Visible only on small screens) */}
+      {/* Mobile Header */}
       <div className="md:hidden bg-blue-900 text-white p-3 flex justify-between items-center shrink-0 z-50 shadow-md print:hidden">
           <div className="flex items-center gap-2">
               <Hexagon className="text-blue-300" size={24} />
@@ -680,8 +621,6 @@ const App: React.FC = () => {
       </div>
 
       <div className="flex-1 flex gap-4 overflow-hidden relative print:hidden">
-        
-        {/* SIDEBAR (Responsive) */}
         <aside className={`
             fixed inset-y-0 right-0 z-50 w-72 bg-gradient-to-br from-blue-800 to-indigo-900 text-white shadow-2xl transform transition-transform duration-300
             md:relative md:translate-x-0 md:w-64 md:rounded-3xl md:shadow-2xl md:border md:border-white/20 md:flex md:flex-col md:overflow-hidden md:shrink-0
@@ -689,7 +628,6 @@ const App: React.FC = () => {
             print:hidden
         `}>
           <div className="p-6 h-full flex flex-col relative overflow-hidden">
-            {/* Mobile Close Button */}
             <button onClick={() => setIsSidebarOpen(false)} className="md:hidden absolute top-4 left-4 p-2 text-white/70 hover:text-white">
                 <X size={24} />
             </button>
@@ -702,7 +640,29 @@ const App: React.FC = () => {
                      </div>
                 </div>
 
-                {/* Navigation Menu */}
+                {/* SUBSCRIPTION STATUS BADGE - COMPACT */}
+                <div 
+                    onClick={() => setShowUpgradeModal(true)}
+                    className={`mb-3 px-2 py-1.5 rounded-lg flex items-center gap-2 cursor-pointer border hover:bg-white/10 transition-all ${isGold ? 'bg-amber-500/10 border-amber-500/30' : isActive ? 'bg-blue-500/10 border-blue-500/30' : 'bg-red-500/10 border-red-500/30'}`}
+                >
+                    {isGold ? <Crown size={14} className="text-amber-400 fill-amber-400 shrink-0" /> : <Clock size={14} className="text-blue-300 shrink-0" />}
+                    
+                    <div className="flex-1 flex items-center gap-1 overflow-hidden">
+                        <span className="font-bold text-white text-[10px] truncate">
+                            {isGold ? 'عضوية ذهبية' : isActive ? 'فترة تجريبية' : 'اشتراك منتهي'}
+                        </span>
+                        {daysLeft > 0 && (
+                            <span className={`text-[9px] ${isGold ? 'text-amber-200' : 'text-blue-200'} opacity-80 whitespace-nowrap`}>
+                                ({daysLeft} يوم)
+                            </span>
+                        )}
+                    </div>
+
+                    <button className={`text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0 shadow-sm transition-colors ${isGold ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-white/90 text-blue-900 hover:bg-white'}`}>
+                        {isGold ? 'تجديد' : 'ترقية'}
+                    </button>
+                </div>
+
                 <div className="space-y-1 overflow-y-auto flex-1 custom-scrollbar pr-1 -mr-2">
                     <NavButton targetView={AppView.DASHBOARD} icon={LayoutDashboard} label="الرئيسية" />
                     <NavButton targetView={AppView.ACQUISITIONS} icon={BarChart2} label="تقييم المكتسبات" />
@@ -710,11 +670,24 @@ const App: React.FC = () => {
                     <NavButton targetView={AppView.QUARTERLY_REPORT} icon={PieChart} label="الحصيلة الفصلية" />
                     <div className="my-2 border-t border-white/10"></div>
                     <NavButton targetView={AppView.SEMINARS} icon={Presentation} label="الندوات التربوية" />
-                    <NavButton targetView={AppView.ADMIN_ASSISTANT} icon={Briefcase} label="المساعد الإداري" />
-                    <NavButton targetView={AppView.DATABASE} icon={Database} label="قاعدة البيانات" />
                     
-                    {/* Branding Button */}
+                    {/* Admin Assistant: Always Visible now, Blocked internally if expired */}
+                    <NavButton targetView={AppView.ADMIN_ASSISTANT} icon={Briefcase} label="المساعد الإداري" />
+                    
+                    <NavButton targetView={AppView.DATABASE} icon={Database} label="قاعدة البيانات" />
                     <NavButton targetView={AppView.BRANDING} icon={ImageIcon} label="هوية المنصة" />
+                    {isAdmin && (
+                        <>
+                            <div className="my-2 border-t border-red-500/30"></div>
+                            <button 
+                                onClick={() => { setView(AppView.ADMIN_DASHBOARD); setIsSidebarOpen(false); }}
+                                className={`flex-1 min-w-[40px] md:w-full p-2 rounded-lg transition-all flex items-center justify-center md:justify-start gap-3 ${view === AppView.ADMIN_DASHBOARD ? 'bg-red-500 text-white shadow-sm' : 'hover:bg-red-500/20 text-red-200'}`} 
+                            >
+                                <ShieldAlert size={18} />
+                                <span className="hidden md:inline text-sm font-bold">لوحة الإدارة</span>
+                            </button>
+                        </>
+                    )}
                 </div>
 
                 {/* Sync Status */}
@@ -733,59 +706,22 @@ const App: React.FC = () => {
                         <div className={`w-2 h-2 rounded-full ${syncStatus === 'error' ? 'bg-red-50' : 'bg-green-400'} animate-pulse`}></div>
                     </div>
                 )}
-
-                {/* Inspector Name & Signature Controls */}
-                <div className="bg-blue-900/40 p-3 rounded-xl border border-blue-400/30 backdrop-blur-md mt-2">
-                    <label className="text-[10px] text-blue-200 font-bold block mb-1 uppercase tracking-wider">اسم المفتش (للتوقيع)</label>
-                    <div className="flex items-center gap-2">
-                        {isEditingInspector ? (
-                            <input 
-                                type="text" 
-                                value={inspectorName}
-                                onChange={(e) => setInspectorName(e.target.value)}
-                                onBlur={() => setIsEditingInspector(false)}
-                                autoFocus
-                                className="w-full bg-blue-950/50 border border-blue-400 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-300"
-                                placeholder="اكتب اسمك هنا..."
-                            />
-                        ) : (
-                            <div 
-                                onClick={() => setIsEditingInspector(true)}
-                                className="flex-1 flex items-center justify-between cursor-pointer hover:bg-white/5 rounded px-2 py-1 transition-colors group"
-                            >
-                                <span className="text-sm font-bold truncate">{inspectorName || 'انقر لإضافة الاسم'}</span>
-                                <PenLine size={12} className="text-blue-300 group-hover:text-white" />
-                            </div>
-                        )}
-                    </div>
-                    
-                    {/* GLOBAL SIGNATURE TOGGLE - RESTORED */}
-                    {signature && (
-                        <div className="mt-3 pt-2 border-t border-blue-800/50 flex items-center justify-between">
-                            <div className="flex items-center gap-1.5 text-blue-200">
-                                <Stamp size={12} className="text-blue-400"/>
-                                <span className="text-[10px] font-bold">إظهار الختم في الطباعة</span>
-                            </div>
-                            <button 
-                                onClick={() => setShowSignature(!showSignature)}
-                                className={`w-8 h-4 rounded-full relative transition-colors duration-300 ${showSignature ? 'bg-blue-400' : 'bg-slate-600/50'}`}
-                                title="تفعيل/تعطيل ظهور الختم"
-                            >
-                                <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all duration-300 shadow-sm ${showSignature ? 'left-[18px]' : 'left-0.5'}`}></div>
-                            </button>
-                        </div>
-                    )}
-                </div>
             </div>
             
-            {/* User Profile Footer */}
+            {/* User Profile */}
             <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between">
-                 <div className="flex items-center gap-3 overflow-hidden">
-                     <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 border border-blue-200 flex items-center justify-center text-blue-700 shrink-0 shadow-sm">
+                 <div onClick={() => setShowSettings(true)} className="flex items-center gap-3 overflow-hidden cursor-pointer hover:bg-white/10 p-1.5 rounded-lg transition-colors flex-1">
+                     <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 border border-blue-200 flex items-center justify-center text-blue-700 shrink-0 shadow-sm relative">
                          <UserCircle2 size={20} />
+                         <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm">
+                             <Settings size={10} className="text-slate-500"/>
+                         </div>
                      </div>
                      <div className="text-xs text-blue-200 truncate max-w-[120px]">
-                         <span className="font-bold text-white text-sm truncate block" title={userFullName}>{userFullName}</span>
+                         <span className="font-bold text-white text-sm truncate block" title={inspectorProfile.fullName || 'مستخدم'}>
+                             {inspectorProfile.fullName || 'مستخدم'}
+                         </span>
+                         <span className="text-[10px] opacity-70">إعدادات الحساب</span>
                      </div>
                  </div>
                  <button 
@@ -799,21 +735,11 @@ const App: React.FC = () => {
           </div>
         </aside>
 
-        {/* Overlay for mobile sidebar */}
-        {isSidebarOpen && (
-            <div 
-                className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm"
-                onClick={() => setIsSidebarOpen(false)}
-            ></div>
-        )}
+        {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)}></div>}
 
         <main className="flex-1 bg-white/95 backdrop-blur-xl md:rounded-3xl shadow-2xl flex relative overflow-hidden border border-white/20 min-w-0 print:hidden">
             
-            {/* TEACHER LIST SIDEBAR (Only visible in EDITOR Views) */}
-            <div className={`
-                transition-all duration-300 flex flex-col bg-white border-l border-gray-200 z-10 print:hidden
-                ${isEditorView ? 'w-80 h-full absolute right-0 md:static transform translate-x-full md:translate-x-0 shadow-xl md:shadow-none block' : 'hidden'} 
-            `}>
+            <div className={`transition-all duration-300 flex flex-col bg-white border-l border-gray-200 z-10 print:hidden ${isEditorView ? 'w-80 h-full absolute right-0 md:static transform translate-x-full md:translate-x-0 shadow-xl md:shadow-none block' : 'hidden'} `}>
                  <TeacherList 
                     teachers={filteredTeachers} 
                     reportsMap={reportsMap}
@@ -829,38 +755,19 @@ const App: React.FC = () => {
                 />
             </div>
 
-            {/* MAIN CONTENT AREA */}
             <div className="flex-1 flex flex-col overflow-hidden relative w-full print:hidden">
-                
-                {/* DASHBOARD SPLIT VIEW (NEW) */}
                 {view === AppView.DASHBOARD && (
                     <div className="flex flex-col h-full bg-slate-50/50">
-                        {/* Dashboard Tabs Header */}
                         <div className="bg-white border-b px-6 py-3 flex justify-between items-center shadow-sm shrink-0 z-20">
                             <h1 className="text-xl font-bold text-slate-800 font-serif flex items-center gap-2">
                                 <LayoutDashboard className="text-blue-600" />
                                 لوحة القيادة
                             </h1>
-                            
                             <div className="flex bg-slate-100 p-1 rounded-xl">
-                                <button 
-                                    onClick={() => setDashboardTab('stats')}
-                                    className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${dashboardTab === 'stats' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                                >
-                                    <BarChart3 size={18} />
-                                    الإحصائيات
-                                </button>
-                                <button 
-                                    onClick={() => setDashboardTab('list')}
-                                    className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${dashboardTab === 'list' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                                >
-                                    <Users size={18} />
-                                    قائمة الأساتذة
-                                </button>
+                                <button onClick={() => setDashboardTab('stats')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${dashboardTab === 'stats' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><BarChart3 size={18} /> الإحصائيات</button>
+                                <button onClick={() => setDashboardTab('list')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${dashboardTab === 'list' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Users size={18} /> قائمة الأساتذة</button>
                             </div>
                         </div>
-
-                        {/* Dashboard Content Area */}
                         <div className="flex-1 overflow-hidden relative">
                             {dashboardTab === 'stats' ? (
                                 <div className="h-full overflow-y-auto animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -869,7 +776,8 @@ const App: React.FC = () => {
                                         reportsMap={reportsMap} 
                                         onNavigateToPromotions={() => setView(AppView.PROMOTIONS)} 
                                         fullTeacherCount={teachers.length} 
-                                        selectedSchool={filterSchool} 
+                                        selectedSchool={filterSchool}
+                                        onProgramSeminar={handleProgramSeminar}
                                     />
                                 </div>
                             ) : (
@@ -877,17 +785,7 @@ const App: React.FC = () => {
                                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 h-full overflow-hidden flex flex-col">
                                         <div className="flex-1 overflow-hidden">
                                             <TeacherList 
-                                                teachers={filteredTeachers} 
-                                                reportsMap={reportsMap}
-                                                currentReport={currentReport}
-                                                onSelect={handleSelectTeacher} 
-                                                selectedId={selectedTeacherId}
-                                                onAddNew={handleAddNewTeacher}
-                                                onImport={handleFullImport}
-                                                onDelete={handleDeleteTeacher}
-                                                availableSchools={availableSchools} availableLevels={availableLevels}
-                                                filterSchool={filterSchool} filterLevel={filterLevel}
-                                                onSetFilterSchool={setFilterSchool} onSetFilterLevel={setFilterLevel}
+                                                teachers={filteredTeachers} reportsMap={reportsMap} currentReport={currentReport} onSelect={handleSelectTeacher} selectedId={selectedTeacherId} onAddNew={handleAddNewTeacher} onImport={handleFullImport} onDelete={handleDeleteTeacher} availableSchools={availableSchools} availableLevels={availableLevels} filterSchool={filterSchool} filterLevel={filterLevel} onSetFilterSchool={setFilterSchool} onSetFilterLevel={setFilterLevel}
                                             />
                                         </div>
                                     </div>
@@ -897,28 +795,14 @@ const App: React.FC = () => {
                     </div>
                 )}
 
-                {/* OTHER VIEWS */}
                 {view === AppView.DATABASE && (
                     <DatabaseManager 
-                        teachers={teachers} 
-                        reportsMap={reportsMap}
-                        tenureReportsMap={tenureReportsMap}
-                        onRestore={handleRestoreBackup}
-                        currentReport={currentReport}
-                        onConnectionChange={setIsGoogleConnected}
-                        isConnected={isGoogleConnected}
-                        onAutoSyncChange={setAutoSyncEnabled}
-                        isAutoSync={autoSyncEnabled}
+                        teachers={teachers} reportsMap={reportsMap} tenureReportsMap={tenureReportsMap} onRestore={handleRestoreBackup} currentReport={currentReport} onConnectionChange={setIsGoogleConnected} isConnected={isGoogleConnected} onAutoSyncChange={setAutoSyncEnabled} isAutoSync={autoSyncEnabled}
                     />
                 )}
                 
                 {view === AppView.ACQUISITIONS && (
-                    <AcqManager 
-                        availableSchools={acqAvailableSchools} 
-                        onDataUpdated={() => setAcqRefreshKey(prev => prev + 1)}
-                        externalFilters={acqFilters} 
-                        onUpdateFilters={(updates) => setAcqFilters(prev => ({ ...prev, ...updates }))}
-                    />
+                    <AcqManager availableSchools={acqAvailableSchools} onDataUpdated={() => setAcqRefreshKey(prev => prev + 1)} externalFilters={acqFilters} onUpdateFilters={(updates) => setAcqFilters(prev => ({ ...prev, ...updates }))} />
                 )}
 
                 {view === AppView.PROMOTIONS && (
@@ -926,30 +810,41 @@ const App: React.FC = () => {
                 )}
                 
                 {view === AppView.EDITOR && selectedTeacher && (
-                    <ReportEditor report={currentReport} teacher={selectedTeacher} onChange={handleReportChange} onTeacherChange={handleTeacherUpdate} onPrint={handlePrint} isGoldMember={isGoldMember} onUpgradeClick={() => setShowUpgradeModal(true)} onUploadSignature={handleSignatureUpload} />
+                    <ReportEditor 
+                        report={currentReport} teacher={selectedTeacher} onChange={handleReportChange} onTeacherChange={handleTeacherUpdate} onPrint={handlePrint} 
+                        isGoldMember={isGold} 
+                        // Now we pass !canPrint to show upgrade modal, instead of blocking the whole view
+                        isExpired={!canPrint()} 
+                        onUpgradeClick={() => setShowUpgradeModal(true)} 
+                    />
                 )}
                 
                 {view === AppView.LEGACY_EDITOR && selectedTeacher && (
-                    <LegacyReportEditor report={currentReport} teacher={selectedTeacher} onChange={handleReportChange} onTeacherChange={handleTeacherUpdate} onPrint={handlePrint} isGoldMember={isGoldMember} onUpgradeClick={() => setShowUpgradeModal(true)} onUploadSignature={handleSignatureUpload} />
+                    <LegacyReportEditor 
+                        report={currentReport} teacher={selectedTeacher} onChange={handleReportChange} onTeacherChange={handleTeacherUpdate} onPrint={handlePrint} 
+                        isGoldMember={isGold} 
+                        isExpired={!canPrint()} 
+                        onUpgradeClick={() => setShowUpgradeModal(true)} 
+                    />
                 )}
                 
                 {view === AppView.TENURE_EDITOR && selectedTeacher && (
-                    <TenureReportEditor report={currentTenureReport} teacher={selectedTeacher} onChange={handleTenureReportChange} onPrint={handlePrint} isGoldMember={isGoldMember} onUploadSignature={handleSignatureUpload} />
+                    <TenureReportEditor 
+                        report={currentTenureReport} 
+                        teacher={selectedTeacher} 
+                        onChange={handleTenureReportChange} 
+                        onPrint={handlePrint} 
+                        isGoldMember={isGold}
+                        isExpired={!canPrint()}
+                        onUpgradeClick={() => setShowUpgradeModal(true)}
+                    />
                 )}
                 
                 {view === AppView.QUARTERLY_REPORT && (
                     <QuarterlyReportEditor 
-                        report={currentQuarterlyReport} 
-                        onChange={handleQuarterlyReportChange} 
-                        onPrint={handlePrint} 
-                        teachers={teachers} 
-                        reportsMap={reportsMap} 
-                        tenureReportsMap={tenureReportsMap} 
-                        signature={effectiveSignature}
-                        onUploadSignature={handleSignatureUpload}
-                        inspectorName={inspectorName}
-                        globalWilaya={derivedGlobalData.wilaya}
-                        globalDistrict={derivedGlobalData.district}
+                        report={currentQuarterlyReport} onChange={handleQuarterlyReportChange} onPrint={handlePrint} teachers={teachers} reportsMap={reportsMap} tenureReportsMap={tenureReportsMap} signature={effectiveSignature} inspectorName={inspectorProfile.fullName} globalWilaya={inspectorProfile.wilaya || derivedGlobalData.wilaya} globalDistrict={inspectorProfile.district || derivedGlobalData.district}
+                        isExpired={!canPrint()}
+                        onUpgradeClick={() => setShowUpgradeModal(true)}
                     />
                 )}
                 
@@ -957,26 +852,36 @@ const App: React.FC = () => {
                     <SeminarsManager 
                         teachers={teachers} 
                         reportsMap={reportsMap} 
-                        inspectorInfo={{ name: currentReport.inspectorName || inspectorName, district: derivedGlobalData.district, wilaya: derivedGlobalData.wilaya }}
-                        signature={effectiveSignature} // Pass Signature
+                        inspectorInfo={{ name: inspectorProfile.fullName, district: inspectorProfile.district || derivedGlobalData.district, wilaya: inspectorProfile.wilaya || derivedGlobalData.wilaya }} 
+                        signature={effectiveSignature} 
+                        isExpired={!canPrint()}
+                        onUpgradeClick={() => setShowUpgradeModal(true)}
+                        initialTopic={pendingSeminarTopic}
+                        onClearInitialTopic={() => setPendingSeminarTopic(null)}
                     />
                 )}
                 
                 {view === AppView.ADMIN_ASSISTANT && (
                     <AdministrativeAssistant 
-                        teachers={teachers}
-                        reportsMap={reportsMap}
-                        tenureReportsMap={tenureReportsMap}
-                        inspectorName={currentReport.inspectorName || inspectorName}
-                        wilaya={derivedGlobalData.wilaya}
-                        district={derivedGlobalData.district}
-                        signature={effectiveSignature} // Pass Signature
+                        teachers={teachers} 
+                        reportsMap={reportsMap} 
+                        tenureReportsMap={tenureReportsMap} 
+                        inspectorName={inspectorProfile.fullName} 
+                        wilaya={inspectorProfile.wilaya || derivedGlobalData.wilaya} 
+                        district={inspectorProfile.district || derivedGlobalData.district} 
+                        signature={effectiveSignature}
+                        isExpired={!isActive} // Pass expiration status (isActive covers Trial + Gold)
+                        onUpgradeClick={() => setShowUpgradeModal(true)}
                     />
                 )}
 
-                {/* BRANDING KIT VIEW */}
                 {view === AppView.BRANDING && (
                     <BrandingKit />
+                )}
+
+                {/* ADMIN DASHBOARD VIEW - PROTECTED */}
+                {view === AppView.ADMIN_DASHBOARD && isAdmin && (
+                    <AdminDashboard />
                 )}
             </div>
         </main>

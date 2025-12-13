@@ -37,20 +37,20 @@ const BrandingKit: React.FC = () => {
                         </div>
                         <div>
                             <h1 className="text-3xl font-bold text-slate-800 font-serif mb-1">المفتش التربوي</h1>
-                            <p className="text-slate-500 font-medium">الخارطة الذهنية الرقمية لتسيير المقاطعة</p>
+                            <p className="text-slate-500 font-medium">محتوى المنصة</p>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-4 bg-slate-50 p-2 pr-4 rounded-full border border-slate-100">
                         <span className="text-xs font-bold text-slate-400">للتواصل والدعم:</span>
                         <div className="flex gap-2">
-                            <a href="#" className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm transform hover:scale-110" title="فيسبوك">
+                            <a href="https://www.facebook.com/profile.php?id=61584959875720" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm transform hover:scale-110" title="فيسبوك">
                                 <Facebook size={20} />
                             </a>
-                            <a href="#" className="w-10 h-10 rounded-full bg-sky-100 text-sky-500 flex items-center justify-center hover:bg-sky-500 hover:text-white transition-all shadow-sm transform hover:scale-110" title="تيليجرام">
+                            <a href="https://t.me/+5TbKaIJ_kgZhZDA0" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-sky-100 text-sky-500 flex items-center justify-center hover:bg-sky-500 hover:text-white transition-all shadow-sm transform hover:scale-110" title="تيليجرام">
                                 <Send size={20} />
                             </a>
-                            <a href="#" className="w-10 h-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center hover:bg-green-600 hover:text-white transition-all shadow-sm transform hover:scale-110" title="واتساب">
+                            <a href="https://chat.whatsapp.com/HTIWa3WFjq41WtAyFGzaDb?mode=hqrc" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center hover:bg-green-600 hover:text-white transition-all shadow-sm transform hover:scale-110" title="واتساب">
                                 <Phone size={20} />
                             </a>
                         </div>
@@ -67,7 +67,7 @@ const BrandingKit: React.FC = () => {
                             <Lock size={56} className="text-emerald-400" />
                         </div>
                         <div className="flex-1 text-center md:text-right">
-                            <h2 className="text-2xl font-bold mb-3 font-serif text-emerald-300">ميثاق الخصوصية والأمان (Local First)</h2>
+                            <h2 className="text-2xl font-bold mb-3 font-serif text-emerald-300">ميثاق الخصوصية والأمان</h2>
                             <p className="leading-relaxed text-slate-200 text-lg mb-4 max-w-3xl">
                                 تم تصميم هذه المنصة وفق مبدأ <strong>"البيانات ملك للمستخدم"</strong>. نطمئن السادة المفتشين أن:
                             </p>
@@ -156,7 +156,7 @@ const BrandingKit: React.FC = () => {
                                     <div>
                                         <h4 className="font-bold text-slate-700 mb-1">التقرير الرقمي الحديث</h4>
                                         <p className="text-sm text-slate-500 leading-relaxed">
-                                            تحرير تقارير التفتيش وفق شبكة معايير دقيقة. يتضمن خاصية <strong>الذكاء الاصطناعي</strong> لصياغة التوجيهات التربوية آلياً بناءً على الملاحظات.
+                                            تحرير تقارير التفتيش وفق شبكة معايير دقيقة. يتضمن خاصية <strong>الاقتراح الآلي</strong> لصياغة التوجيهات التربوية آلياً.
                                         </p>
                                     </div>
                                 </div>
@@ -172,9 +172,9 @@ const BrandingKit: React.FC = () => {
                                 <div className="flex gap-4 items-start group">
                                     <div className="mt-1 w-2 h-2 rounded-full bg-indigo-400 group-hover:scale-150 transition-transform"></div>
                                     <div>
-                                        <h4 className="font-bold text-slate-700 mb-1">النموذج الكلاسيكي (Legacy)</h4>
+                                        <h4 className="font-bold text-slate-700 mb-1">النموذج الكلاسيكي (القديم)</h4>
                                         <p className="text-sm text-slate-500 leading-relaxed">
-                                            الاحتفاظ بنموذج التقرير القديم (شبكة الملاحظة التقليدية) للأساتذة الذين يفضلون النمط الكلاسيكي.
+                                            الاحتفاظ بنموذج التقرير القديم (شبكة الملاحظة التقليدية) للسادة المفتشين الذين يفضلون النمط الكلاسيكي.
                                         </p>
                                     </div>
                                 </div>

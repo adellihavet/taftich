@@ -1,8 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { QuarterlyReportData, Teacher, ReportData, TenureReportData } from '../types';
-import { Printer, RotateCw, Calendar, RefreshCw, Stamp, Settings2, Loader2 } from 'lucide-react';
+import { Printer, RotateCw, Calendar, RefreshCw, Stamp, Settings2, Loader2, FileSpreadsheet, Lock } from 'lucide-react';
 import PrintableQuarterlyReport from './PrintableQuarterlyReport';
+
+declare const XLSX: any;
 
 interface QuarterlyReportEditorProps {
     report: QuarterlyReportData;
@@ -16,11 +18,13 @@ interface QuarterlyReportEditorProps {
     inspectorName: string;
     globalWilaya: string;
     globalDistrict: string;
+    isExpired?: boolean;
+    onUpgradeClick?: () => void;
 }
 
 const QuarterlyReportEditor: React.FC<QuarterlyReportEditorProps> = ({ 
     report, onChange, onPrint, teachers, reportsMap, tenureReportsMap, signature, onUploadSignature,
-    inspectorName, globalWilaya, globalDistrict
+    inspectorName, globalWilaya, globalDistrict, isExpired = false, onUpgradeClick
 }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [showManualStats, setShowManualStats] = useState(false);
@@ -192,8 +196,142 @@ const QuarterlyReportEditor: React.FC<QuarterlyReportEditorProps> = ({
         }, 500);
     };
 
+    const handleExportExcel = () => {
+        if (typeof XLSX === 'undefined') {
+            alert("مكتبة Excel غير متوفرة.");
+            return;
+        }
+
+        const wb = XLSX.utils.book_new();
+        wb.Workbook = { Views: [{ RTL: true }] };
+
+        // Helper calculations
+        const totalDays = Object.values(report.days).reduce((a, b) => a + b, 0);
+        const totalTiming = (report.visitsMorning || 0) + (report.visitsEvening || 0);
+        const totalRanks = Object.values(report.ranks).reduce((a, b) => a + b, 0);
+        const totalLevels = Object.values(report.levels).reduce((a, b) => a + b, 0);
+        const totalSubjects = Object.values(report.subjects).reduce((a, b) => a + b, 0);
+
+        const pct = (val: number, total: number) => total === 0 ? '' : ((val / total) * 100).toFixed(1) + '%';
+        const currentDate = new Date().toLocaleDateString('ar-DZ', { year: 'numeric', month: '2-digit', day: '2-digit' });
+
+        // --- CONSTRUCT DATA GRID (Visual Layout) ---
+        const wsData = [
+            // Row 0-2: Header
+            ["الجمهورية الجزائرية الديمقراطية الشعبية"],
+            ["وزارة التربية الوطنية"],
+            [],
+            [`مديرية التربية لولاية: ${report.wilaya}`, "", "", "", "", "", "", "المفتشية العامة للبيداغوجيا"],
+            [],
+            // Row 5: Title
+            [`حصيلة نشاطات مفتش التعليم الابتدائي ${report.term === 'السنوي' ? 'للسنة الدراسية:' : `للفصل ${report.term} من السنة الدراسية:`} ${report.schoolYear}`],
+            [],
+            // Row 7-8: Table 1 Headers
+            ["اسم المفتش ولقبه", "التخصص", "المقاطعة", "عدد الأساتذة", "", "", "النشاطات (الزيارات المنجزة)", "", "", "", "المهام الاخرى (عددها)"],
+            ["", "", "", "الاجمالي", "المتربصين", "المعنيون بالتثبيت", "التفتيش", "التثبيت", "التكوين", "الاستفادة تكوين", "تأطير عمليات", "التحقيقات"],
+            // Row 9: Table 1 Data
+            [report.inspectorName, report.rank, report.district, report.teachersTotal, report.teachersTrainee, report.teachersTenure, report.visitsInspection, report.visitsTenure, report.visitsTraining, report.visitsTrainingBenefit, report.tasksSupervision, report.tasksInvestigations],
+            [],
+            // Row 11: Side by Side Tables (Days & Timing)
+            ["* توزيع الزيارات على الأيام", "", "", "", "", "", "", "", "* توقيت الزيارات"],
+            ["البيان", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "المجموع", "", "الصباح", "المساء"],
+            ["العدد", report.days.sun, report.days.mon, report.days.tue, report.days.wed, report.days.thu, totalDays, "", report.visitsMorning, report.visitsEvening],
+            ["النسبة %", pct(report.days.sun, totalDays), pct(report.days.mon, totalDays), pct(report.days.tue, totalDays), pct(report.days.wed, totalDays), pct(report.days.thu, totalDays), "100%", "", pct(report.visitsMorning, totalTiming), pct(report.visitsEvening, totalTiming)],
+            [],
+            // Row 16: Table 4 (Ranks)
+            ["* توزيع الزيارات حسب الرتب لكل المواد"],
+            ["البيان", "متربص", "أستاذ التعليم الابتدائي", "أ قسم أول", "أ قسم ثان", "أستاذ مميز", "متعاقد / مستخلف", "المجموع"],
+            ["العدد", report.ranks.stagiere, report.ranks.primary, report.ranks.class1, report.ranks.class2, report.ranks.distinguished, report.ranks.contract, totalRanks],
+            ["النسبة %", pct(report.ranks.stagiere, totalRanks), pct(report.ranks.primary, totalRanks), pct(report.ranks.class1, totalRanks), pct(report.ranks.class2, totalRanks), pct(report.ranks.distinguished, totalRanks), pct(report.ranks.contract, totalRanks), "100%"],
+            [],
+            // Row 21: Table 5 (Levels)
+            ["* توزيع الزيارات التفتيشية والتوجيهية ... حسب المستويات لكل المواد"],
+            ["المستويات", "التحضيري", "السنة 01", "السنة 02", "السنة 03", "السنة 04", "السنة 05"],
+            ["العدد", report.levels.prep, report.levels.year1, report.levels.year2, report.levels.year3, report.levels.year4, report.levels.year5],
+            ["النسبة المئوية", pct(report.levels.prep, totalLevels), pct(report.levels.year1, totalLevels), pct(report.levels.year2, totalLevels), pct(report.levels.year3, totalLevels), pct(report.levels.year4, totalLevels), pct(report.levels.year5, totalLevels)],
+            [],
+            // Row 26: Table 6 (Subjects)
+            ["* توزيع الزيارات على المواد"],
+            ["البيان", "اللغة العربية", "رياضيات", "ت. إسلامية", "تاريــخ", "جغرافيا", "ت. مدنية", "ت. علمية", "ت. فنية"],
+            ["العدد", report.subjects.arabic, report.subjects.math, report.subjects.islamic, report.subjects.history, report.subjects.geo, report.subjects.civics, report.subjects.science, report.subjects.art],
+            ["النسبة المئوية", pct(report.subjects.arabic, totalSubjects), pct(report.subjects.math, totalSubjects), pct(report.subjects.islamic, totalSubjects), pct(report.subjects.history, totalSubjects), pct(report.subjects.geo, totalSubjects), pct(report.subjects.civics, totalSubjects), pct(report.subjects.science, totalSubjects), pct(report.subjects.art, totalSubjects)],
+            [],
+            [],
+            // Footer
+            [`حرر بـ: ${report.wilaya} في: ${currentDate}`],
+            ["مفتش التعليم الابتدائي"],
+            ["(توقيع وختم)"]
+        ];
+
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+        // --- MERGES ---
+        ws['!merges'] = [
+            // Header
+            { s: { r: 0, c: 0 }, e: { r: 0, c: 11 } }, // Republic
+            { s: { r: 1, c: 0 }, e: { r: 1, c: 11 } }, // Ministry
+            { s: { r: 3, c: 7 }, e: { r: 3, c: 11 } }, // Inspectorate General
+            
+            // Title
+            { s: { r: 5, c: 0 }, e: { r: 5, c: 11 } },
+
+            // Main Table Headers
+            { s: { r: 7, c: 0 }, e: { r: 8, c: 0 } }, // Name
+            { s: { r: 7, c: 1 }, e: { r: 8, c: 1 } }, // Rank
+            { s: { r: 7, c: 2 }, e: { r: 8, c: 2 } }, // District
+            { s: { r: 7, c: 3 }, e: { r: 7, c: 5 } }, // Teacher Counts Header
+            { s: { r: 7, c: 6 }, e: { r: 7, c: 9 } }, // Visits Header
+            { s: { r: 7, c: 10 }, e: { r: 7, c: 11 } }, // Other Tasks Header
+
+            // Side by Side Tables Headers
+            { s: { r: 11, c: 0 }, e: { r: 11, c: 6 } }, // Days Title
+            { s: { r: 11, c: 8 }, e: { r: 11, c: 9 } }, // Timing Title
+
+            // Other Titles
+            { s: { r: 16, c: 0 }, e: { r: 16, c: 7 } }, // Ranks Title
+            { s: { r: 21, c: 0 }, e: { r: 21, c: 6 } }, // Levels Title
+            { s: { r: 26, c: 0 }, e: { r: 26, c: 8 } }, // Subjects Title
+            
+            // Footer
+            { s: { r: 31, c: 0 }, e: { r: 31, c: 4 } },
+            { s: { r: 32, c: 0 }, e: { r: 32, c: 4 } },
+            { s: { r: 33, c: 0 }, e: { r: 33, c: 4 } },
+        ];
+
+        // --- COL WIDTHS ---
+        ws['!cols'] = [
+            { wch: 20 }, // A
+            { wch: 20 }, // B
+            { wch: 15 }, // C
+            { wch: 10 }, // D
+            { wch: 10 }, // E
+            { wch: 15 }, // F
+            { wch: 10 }, // G
+            { wch: 10 }, // H
+            { wch: 10 }, // I
+            { wch: 15 }, // J
+            { wch: 15 }, // K
+            { wch: 15 }, // L
+        ];
+
+        // Center Alignment for Layout (Best effort without Pro styles)
+        // Note: Basic XLSX doesn't support easy centering without style lib, 
+        // but structured AoA + merges is the best structural representation.
+
+        XLSX.utils.book_append_sheet(wb, ws, "الحصيلة");
+        XLSX.writeFile(wb, `حصيلة_فصلية_${report.term.replace(/\s/g, '_')}.xlsx`);
+    };
+
     const update = (field: keyof QuarterlyReportData, value: any) => {
         onChange({ ...report, [field]: value });
+    };
+    
+    const handlePrint = () => {
+        if (isExpired) {
+            onUpgradeClick && onUpgradeClick();
+        } else {
+            onPrint();
+        }
     };
 
     return (
@@ -265,7 +403,7 @@ const QuarterlyReportEditor: React.FC<QuarterlyReportEditorProps> = ({
                             <span>إضافات يدوية</span>
                         </button>
 
-                        {onUploadSignature && (
+                        {onUploadSignature && !isExpired && (
                             <div className="relative">
                                 <input 
                                     type="file" 
@@ -285,17 +423,33 @@ const QuarterlyReportEditor: React.FC<QuarterlyReportEditorProps> = ({
                         )}
 
                         <button 
-                            onClick={onPrint}
-                            className="bg-slate-800 text-white px-4 py-2 rounded-lg font-bold shadow hover:bg-slate-900 flex items-center gap-2 text-xs"
+                            onClick={handleExportExcel}
+                            className="bg-green-600 text-white px-3 py-2 rounded-lg font-bold shadow hover:bg-green-700 flex items-center gap-2 text-xs"
+                            title="تصدير إلى Excel"
                         >
-                            <Printer size={16} />
+                            <FileSpreadsheet size={16} />
+                        </button>
+
+                        <button 
+                            onClick={handlePrint}
+                            className={`bg-slate-800 text-white px-4 py-2 rounded-lg font-bold shadow hover:bg-slate-900 flex items-center gap-2 text-xs ${isExpired ? 'opacity-70' : ''}`}
+                        >
+                            {isExpired ? <Lock size={16}/> : <Printer size={16} />}
                             طباعة
                         </button>
                     </div>
                 </div>
 
                 {showManualStats && (
-                    <div className="bg-indigo-50/50 p-2 rounded-xl border border-indigo-100 grid grid-cols-2 md:grid-cols-5 gap-3 animate-in slide-in-from-top-2">
+                    <div className="bg-indigo-50/50 p-2 rounded-xl border border-indigo-100 grid grid-cols-2 md:grid-cols-7 gap-3 animate-in slide-in-from-top-2">
+                        <div>
+                            <label className="block text-[9px] font-bold text-slate-500 mb-1">زيارات صباحية</label>
+                            <input type="number" value={report.visitsMorning} onChange={e => update('visitsMorning', parseInt(e.target.value) || 0)} className="w-full p-1 border rounded text-xs font-bold text-center border-indigo-200" />
+                        </div>
+                        <div>
+                            <label className="block text-[9px] font-bold text-slate-500 mb-1">زيارات مسائية</label>
+                            <input type="number" value={report.visitsEvening} onChange={e => update('visitsEvening', parseInt(e.target.value) || 0)} className="w-full p-1 border rounded text-xs font-bold text-center border-indigo-200" />
+                        </div>
                         <div>
                             <label className="block text-[9px] font-bold text-slate-500 mb-1">ندوات التكوين</label>
                             <input type="number" value={report.visitsTraining} onChange={e => update('visitsTraining', parseInt(e.target.value) || 0)} className="w-full p-1 border rounded text-xs font-bold text-center" />
@@ -313,7 +467,7 @@ const QuarterlyReportEditor: React.FC<QuarterlyReportEditorProps> = ({
                             <input type="number" value={report.tasksInvestigations} onChange={e => update('tasksInvestigations', parseInt(e.target.value) || 0)} className="w-full p-1 border rounded text-xs font-bold text-center" />
                         </div>
                         <div>
-                            <label className="block text-[9px] font-bold text-slate-500 mb-1">معنيون بالتثبيت ( حسب مقرر التأهيل)</label>
+                            <label className="block text-[9px] font-bold text-slate-500 mb-1">معنيون بالتثبيت</label>
                             <input type="number" value={report.teachersTenure} onChange={e => update('teachersTenure', parseInt(e.target.value) || 0)} className="w-full p-1 border rounded text-xs font-bold text-center" />
                         </div>
                     </div>

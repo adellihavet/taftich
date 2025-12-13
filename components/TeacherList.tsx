@@ -1,7 +1,7 @@
 
 import React, { useRef, useState, useMemo } from 'react';
 import { Teacher, ReportData } from '../types';
-import { User, Plus, Search, Trash2, ChevronDown, ChevronRight, ArrowUpCircle, Filter, School, BookOpen, FileSpreadsheet, Download, AlertCircle, Clock, CheckCircle2, FileEdit } from 'lucide-react';
+import { User, Plus, Search, Trash2, ChevronDown, ChevronRight, ArrowUpCircle, Filter, School, BookOpen, FileSpreadsheet, Download, AlertCircle, Clock, CheckCircle2, FileEdit, ZoomIn } from 'lucide-react';
 import { generateSchoolTemplate, parseSchoolExcel } from '../utils/sheetHelper';
 
 interface TeacherListProps {
@@ -40,6 +40,7 @@ const TeacherList: React.FC<TeacherListProps> = ({
     onSetFilterLevel
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
+    const [isDeepSearch, setIsDeepSearch] = useState(false);
     const [groupBy, setGroupBy] = useState<GroupBy>('status'); 
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
     const [showFilters, setShowFilters] = useState(false);
@@ -55,12 +56,10 @@ const TeacherList: React.FC<TeacherListProps> = ({
 
     // --- Strict Priority Logic ---
     const getPriorityStatus = (teacher: Teacher, activeReport?: ReportData) => {
-        // 1. Rule: If current report has a valid date, status clears (Teacher is being visited)
         if (activeReport && activeReport.inspectionDate && activeReport.inspectionDate.trim() !== '') {
             return { status: null, reason: '' };
         }
 
-        // 2. Rule: High Priority (> 3 Years from last inspection)
         if (!teacher.lastInspectionDate) {
              return { status: 'urgent', reason: 'لم يزر من قبل (أولوية قصوى)' };
         }
@@ -77,10 +76,8 @@ const TeacherList: React.FC<TeacherListProps> = ({
             };
         }
 
-        // 3. Rule: Medium Priority (Mark < Average for Echelon based on Official Grid)
-        // Formula derived from grid: Minimum "Medium" Mark = 9.5 + (Echelon * 0.5)
         const echelon = parseInt(teacher.echelon || '0');
-        const minMediumMark = 9.5 + (echelon * 0.5); // The lower bound of 'Medium' (Moyen)
+        const minMediumMark = 9.5 + (echelon * 0.5); 
         
         if (teacher.lastMark < minMediumMark) {
             return { 
@@ -141,10 +138,30 @@ const TeacherList: React.FC<TeacherListProps> = ({
     };
 
     const filteredTeachers = useMemo(() => {
-        return teachers.filter(t => 
-            t.fullName.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-    }, [teachers, searchQuery]);
+        const query = searchQuery.toLowerCase();
+        
+        return teachers.filter(t => {
+            // 1. Basic Search (Name)
+            if (t.fullName.toLowerCase().includes(query)) return true;
+            
+            // 2. Deep Search (Reports content)
+            if (isDeepSearch) {
+                const report = reportsMap[t.id];
+                if (report) {
+                    // Search in General Assessment
+                    if (report.generalAssessment?.toLowerCase().includes(query)) return true;
+                    // Search in Observations (Improvement Notes)
+                    if (report.observations.some(o => o.improvementNotes?.toLowerCase().includes(query))) return true;
+                    // Search in Legacy Data
+                    if (report.legacyData && JSON.stringify(report.legacyData).toLowerCase().includes(query)) return true;
+                }
+                // Search in Private Notes
+                if (t.privateNotes?.toLowerCase().includes(query)) return true;
+            }
+            
+            return false;
+        });
+    }, [teachers, searchQuery, isDeepSearch, reportsMap]);
 
     const groupedTeachers = useMemo(() => {
         if (groupBy === 'none') return { 'الكل': filteredTeachers };
@@ -224,15 +241,24 @@ const TeacherList: React.FC<TeacherListProps> = ({
                 
                 {/* Row 1: Actions */}
                 <div className="flex gap-2 items-center">
-                    <div className="relative flex-1">
+                    <div className="relative flex-1 group">
                         <input 
                             type="text" 
-                            placeholder="بحث عن أستاذ..." 
+                            placeholder={isDeepSearch ? "بحث في التقارير والملاحظات..." : "بحث عن أستاذ..."}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-8 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all placeholder:text-gray-400"
+                            className={`w-full pl-8 pr-8 py-2 border rounded-xl text-sm focus:ring-2 outline-none transition-all placeholder:text-gray-400 ${isDeepSearch ? 'bg-indigo-50 border-indigo-200 focus:ring-indigo-500' : 'bg-gray-50 border-gray-200 focus:ring-blue-500 focus:bg-white'}`}
                         />
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                        <Search className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${isDeepSearch ? 'text-indigo-400' : 'text-gray-400'}`} size={16} />
+                        
+                        {/* Deep Search Toggle */}
+                        <button 
+                            onClick={() => setIsDeepSearch(!isDeepSearch)}
+                            className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors ${isDeepSearch ? 'bg-indigo-200 text-indigo-700' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+                            title={isDeepSearch ? "إلغاء البحث العميق" : "تفعيل البحث العميق (داخل التقارير)"}
+                        >
+                            <ZoomIn size={14} />
+                        </button>
                     </div>
                     
                     {/* Excel Actions */}
@@ -320,11 +346,15 @@ const TeacherList: React.FC<TeacherListProps> = ({
                      <div className="flex flex-col items-center justify-center h-64 text-gray-400 text-center">
                         <User size={48} className="mb-3 opacity-20" />
                         <p className="text-sm font-medium">لا توجد نتائج</p>
-                        <p className="text-xs mt-1 opacity-70">جرب تغيير معايير البحث أو التصفية</p>
+                        <p className="text-xs mt-1 opacity-70">
+                            {isDeepSearch ? "جرب البحث عن كلمة أخرى في التقارير" : "جرب تغيير معايير البحث أو التصفية"}
+                        </p>
                     </div>
                 )}
 
-                {Object.entries(groupedTeachers).map(([groupName, groupItems]) => (
+                {Object.entries(groupedTeachers).map(([groupName, groupItems]) => {
+                    const items = groupItems as Teacher[];
+                    return (
                     <div key={groupName} className="mb-2">
                         {groupBy !== 'none' && (
                             <div 
@@ -334,13 +364,13 @@ const TeacherList: React.FC<TeacherListProps> = ({
                                 <div className="flex items-center gap-2">
                                     {expandedGroups[groupName] ? <ChevronDown size={14} className="text-gray-400"/> : <ChevronRight size={14} className="text-gray-400"/>}
                                     <span className="text-xs font-bold text-gray-600 group-hover:text-gray-900">{groupName}</span>
-                                    <span className="bg-gray-200 text-gray-600 text-[10px] px-1.5 rounded-full min-w-[20px] text-center">{groupItems.length}</span>
+                                    <span className="bg-gray-200 text-gray-600 text-[10px] px-1.5 rounded-full min-w-[20px] text-center">{items.length}</span>
                                 </div>
                             </div>
                         )}
                         
                         <div className={`${groupBy !== 'none' && expandedGroups[groupName] ? 'hidden' : 'block'} space-y-2`}>
-                            {groupItems.map(t => {
+                            {items.map(t => {
                                 const promotionDue = isEligibleForPromotion(t);
                                 const isSelected = selectedId === t.id;
                                 
@@ -388,6 +418,7 @@ const TeacherList: React.FC<TeacherListProps> = ({
                                         <div className="overflow-hidden flex-1">
                                             <div className="flex items-center justify-between mb-0.5">
                                                 <p className={`font-bold text-sm truncate ${isSelected ? 'text-white' : 'text-gray-800'}`}>{t.fullName}</p>
+                                                {isDeepSearch && <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 rounded-full shrink-0">مطابقة نصية</span>}
                                             </div>
                                             
                                             <div className="flex items-center gap-2">
@@ -436,7 +467,7 @@ const TeacherList: React.FC<TeacherListProps> = ({
                             )})}
                         </div>
                     </div>
-                ))}
+                )})}
             </div>
         </div>
     );

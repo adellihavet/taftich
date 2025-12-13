@@ -1,6 +1,7 @@
+
 import React, { useState, useRef } from 'react';
 import { ReportData, Teacher, LegacyReportOptions } from '../types';
-import { Printer, User, FileText, CheckSquare, Loader2, Wand2, Stamp } from 'lucide-react';
+import { Printer, User, FileText, CheckSquare, Loader2, Wand2, Stamp, Lock } from 'lucide-react';
 import VoiceTextarea from './VoiceTextarea';
 import VoiceInput from './VoiceInput';
 import { generateReportAssessment } from '../services/geminiService';
@@ -23,20 +24,24 @@ interface LegacyReportEditorProps {
     isGoldMember: boolean;
     onUpgradeClick: () => void;
     onUploadSignature?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    isExpired?: boolean;
 }
 
 const LegacyReportEditor: React.FC<LegacyReportEditorProps> = ({ 
-    report, teacher, onChange, onTeacherChange, onPrint, isGoldMember, onUpgradeClick, onUploadSignature
+    report, teacher, onChange, onTeacherChange, onPrint, isGoldMember, onUpgradeClick, onUploadSignature,
+    isExpired = false
 }) => {
     const [activeTab, setActiveTab] = useState<'info' | 'grid' | 'evaluation'>('info');
     const [isGenerating, setIsGenerating] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const updateField = (field: keyof ReportData, value: any) => {
+        if (isExpired) return;
         onChange({ ...report, [field]: value });
     };
 
     const updateLegacyField = (field: keyof LegacyReportOptions, value: string) => {
+        if (isExpired) return;
         onChange({
             ...report,
             legacyData: { ...report.legacyData!, [field]: value }
@@ -44,10 +49,12 @@ const LegacyReportEditor: React.FC<LegacyReportEditorProps> = ({
     };
 
     const updateTeacherField = (field: keyof Teacher, value: any) => {
+        if (isExpired) return;
         if (onTeacherChange) onTeacherChange({ ...teacher, [field]: value });
     };
 
     const handleGenerateAssessment = async () => {
+        if (isExpired) return;
         if (!isGoldMember) {
             onUpgradeClick();
             return;
@@ -64,9 +71,9 @@ const LegacyReportEditor: React.FC<LegacyReportEditorProps> = ({
     };
 
     return (
-        <div className="h-full flex flex-col bg-gray-50">
+        <div className={`h-full flex flex-col bg-gray-50 ${isExpired ? 'pointer-events-none opacity-80' : ''}`}>
             {/* Toolbar */}
-            <div className="bg-gray-800 text-white border-b p-4 flex justify-between items-center sticky top-0 z-20 shadow-sm">
+            <div className="bg-gray-800 text-white border-b p-4 flex justify-between items-center sticky top-0 z-20 shadow-sm pointer-events-auto">
                  <div className="flex gap-2">
                     <button onClick={() => setActiveTab('info')} className={`px-4 py-2 rounded-lg font-bold transition-colors flex items-center gap-2 ${activeTab === 'info' ? 'bg-white text-gray-900' : 'bg-gray-700 hover:bg-gray-600'}`}>
                         <User size={18}/> المعلومات
@@ -81,7 +88,7 @@ const LegacyReportEditor: React.FC<LegacyReportEditorProps> = ({
                 <div className="flex items-center gap-2">
                     <span className="text-xs bg-yellow-600 text-white px-2 py-1 rounded">نموذج كلاسيكي</span>
                     
-                    {onUploadSignature && (
+                    {onUploadSignature && !isExpired && (
                         <div className="relative">
                             <input type="file" ref={fileInputRef} onChange={onUploadSignature} className="hidden" accept="image/*" />
                             <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded-lg text-gray-400 hover:bg-gray-700 hover:text-white transition-colors" title="رفع صورة الإمضاء/الختم">
@@ -90,8 +97,8 @@ const LegacyReportEditor: React.FC<LegacyReportEditorProps> = ({
                         </div>
                     )}
 
-                    <button onClick={onPrint} className="flex items-center gap-2 bg-white text-gray-900 px-4 py-2 rounded-lg hover:bg-gray-100 font-bold shadow-sm">
-                        <Printer size={18} />
+                    <button onClick={isExpired ? onUpgradeClick : onPrint} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold shadow-sm ${isExpired ? 'bg-gray-600 text-gray-300' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>
+                        {isExpired ? <Lock size={18}/> : <Printer size={18} />}
                         طباعة
                     </button>
                 </div>
@@ -260,8 +267,8 @@ const LegacyReportEditor: React.FC<LegacyReportEditorProps> = ({
                                 />
                                 <button 
                                     onClick={handleGenerateAssessment}
-                                    disabled={isGenerating}
-                                    className="absolute bottom-4 left-14 text-xs bg-gray-900 text-white px-3 py-1.5 rounded hover:bg-black transition-colors shadow-md flex items-center gap-2"
+                                    disabled={isGenerating || isExpired}
+                                    className="absolute bottom-4 left-14 text-xs bg-gray-900 text-white px-3 py-1.5 rounded hover:bg-black transition-colors shadow-md flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {isGenerating ? <Loader2 className="animate-spin" size={12} /> : <Wand2 size={12} />}
                                     توليد

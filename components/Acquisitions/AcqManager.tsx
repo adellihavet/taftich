@@ -1,12 +1,13 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { Upload, Save, Check, ArrowLeftRight, School, Users, FileSpreadsheet, AlertTriangle, BarChart2, Layers, BookOpen, Filter, Trash2, PieChart, Database, Download, FileJson, RefreshCcw, Map, Info, AlertOctagon, X, Search, Table2, Grid, FileText, Printer, CheckSquare, XCircle, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Upload, Save, Check, ArrowLeftRight, School, Users, FileSpreadsheet, AlertTriangle, BarChart2, Layers, BookOpen, Filter, Trash2, PieChart, Database, Download, FileJson, RefreshCcw, Map, Info, AlertOctagon, X, Search, Table2, Grid, FileText, Printer, CheckSquare, XCircle, ToggleLeft, ToggleRight, Cloud, CloudDownload, CloudUpload } from 'lucide-react';
 import { AcqStudent, AcqClassRecord, AcqFilterState, AcqGlobalRecord } from '../../types/acquisitions';
 import { parseAcqExcel, parseGlobalAcqExcel } from '../../utils/acqParser';
 import { saveAcqRecord, getAcqDB, deleteAcqRecord, saveGlobalAcqRecord, getGlobalAcqDB, deleteGlobalAcqRecord } from '../../services/acqStorage';
 import AcqStatsDashboard from './AcqStatsDashboard';
 import AcqResultsTable from './AcqResultsTable';
 import AcqStructuredAnalysis from './Analytics/AcqStructuredAnalysis';
+import { syncWithScript, readFromScript } from '../../services/sheetsService';
 
 interface AcqManagerProps {
     availableSchools: string[];
@@ -48,6 +49,10 @@ const AcqManager: React.FC<AcqManagerProps> = ({ availableSchools, onDataUpdated
     // Data State
     const [records, setRecords] = useState<AcqClassRecord[]>([]);
     const [globalRecords, setGlobalRecords] = useState<AcqGlobalRecord[]>([]);
+    
+    // Sync State
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [syncMessage, setSyncMessage] = useState('');
     
     // Initial Load & Refresh
     useEffect(() => {
@@ -296,6 +301,90 @@ const AcqManager: React.FC<AcqManagerProps> = ({ availableSchools, onDataUpdated
         }
     };
 
+    // --- CLOUD SYNC LOGIC ---
+    
+    const handleCloudUpload = async () => {
+        const scriptUrl = localStorage.getItem('mufattish_script_url');
+        if (!scriptUrl) {
+            alert("لم يتم ربط التطبيق بقاعدة بيانات Google Sheets. يرجى الذهاب لقسم 'قاعدة البيانات' أولاً.");
+            return;
+        }
+        
+        // We sync ALL records (Detailed + Global)
+        // Note: For simplicity and performance in this demo, we might just sync detailed for now, or bundle them.
+        // Let's bundle detailed records as they are the most critical.
+        
+        setIsSyncing(true);
+        setSyncMessage('جاري رفع بيانات المكتسبات...');
+        
+        try {
+            const allDetailed = getAcqDB().records;
+            const allGlobal = getGlobalAcqDB().records;
+            
+            // We combine them into a single array of objects for the sheet
+            // We need a common structure or we just dump raw JSON.
+            // The sheet logic expects an array of objects.
+            // Let's send them as separate rows where each row is a record.
+            
+            const payload = [
+                ...allDetailed, 
+                ...allGlobal.map(r => ({...r, type: 'GLOBAL_RECORD'})) // Mark globals
+            ];
+
+            await syncWithScript(scriptUrl, payload, 'SYNC_ACQ');
+            setSyncMessage('تم الحفظ في السحابة بنجاح!');
+            setTimeout(() => setSyncMessage(''), 3000);
+        } catch (e: any) {
+            console.error(e);
+            setSyncMessage('فشل الرفع: ' + e.message);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    const handleCloudDownload = async () => {
+        const scriptUrl = localStorage.getItem('mufattish_script_url');
+        if (!scriptUrl) {
+            alert("لم يتم ربط التطبيق بقاعدة بيانات Google Sheets.");
+            return;
+        }
+
+        if(!confirm("تحذير: استرجاع البيانات من السحابة سيقوم بدمجها مع البيانات الحالية. هل تريد المتابعة؟")) return;
+
+        setIsSyncing(true);
+        setSyncMessage('جاري جلب البيانات...');
+
+        try {
+            const data = await readFromScript(scriptUrl, 'READ_ACQ');
+            if (Array.isArray(data)) {
+                let addedCount = 0;
+                // Process each record
+                data.forEach((rec: any) => {
+                    if (rec.type === 'GLOBAL_RECORD') {
+                         saveGlobalAcqRecord(rec);
+                    } else {
+                         saveAcqRecord(rec);
+                    }
+                    addedCount++;
+                });
+                
+                // Refresh View
+                setRecords(getAcqDB().records);
+                setGlobalRecords(getGlobalAcqDB().records);
+                if (onDataUpdated) onDataUpdated();
+
+                setSyncMessage(`تم استرجاع ${addedCount} سجل بنجاح.`);
+                setTimeout(() => setSyncMessage(''), 3000);
+            } else {
+                setSyncMessage('لم يتم العثور على بيانات صالحة.');
+            }
+        } catch (e: any) {
+            setSyncMessage('فشل الاسترجاع: ' + e.message);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
     const handleExportDB = () => {
          const db = getAcqDB();
          const dataStr = JSON.stringify(db, null, 2);
@@ -427,15 +516,42 @@ const AcqManager: React.FC<AcqManagerProps> = ({ availableSchools, onDataUpdated
                     <div className="h-full overflow-y-auto p-6 md:p-8">
                         {dataSubView === 'list' ? (
                             <div className="space-y-6">
-                                <div className="flex justify-between items-center mb-6">
-                                     <h2 className="font-bold text-slate-700">الأقسام والبيانات</h2>
-                                     <div className="flex gap-2">
+                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                                     <div>
+                                        <h2 className="font-bold text-slate-700 text-lg">الأقسام والبيانات المحفوظة</h2>
+                                        <p className="text-xs text-slate-500">إدارة قاعدة بيانات المكتسبات المحلية والسحابية</p>
+                                     </div>
+                                     <div className="flex flex-wrap gap-2">
+                                         {/* CLOUD SYNC BUTTONS */}
+                                         <button 
+                                            onClick={handleCloudUpload}
+                                            disabled={isSyncing}
+                                            className="px-4 py-2 bg-sky-100 text-sky-700 hover:bg-sky-200 rounded shadow-sm text-xs font-bold flex items-center gap-2 transition-colors disabled:opacity-50"
+                                            title="رفع البيانات إلى Google Sheet"
+                                         >
+                                            <CloudUpload size={16}/> {isSyncing ? 'جاري الرفع...' : 'حفظ سحابي'}
+                                         </button>
+                                         <button 
+                                            onClick={handleCloudDownload}
+                                            disabled={isSyncing}
+                                            className="px-4 py-2 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded shadow-sm text-xs font-bold flex items-center gap-2 transition-colors disabled:opacity-50"
+                                            title="جلب البيانات من Google Sheet"
+                                         >
+                                            <CloudDownload size={16}/> {isSyncing ? 'جاري الجلب...' : 'استرجاع سحابي'}
+                                         </button>
+                                         <div className="w-px bg-slate-300 mx-1"></div>
                                          <button onClick={handleExportDB} className="px-4 py-2 bg-white border rounded shadow-sm text-xs font-bold">نسخة احتياطية</button>
-                                         <button onClick={() => jsonInputRef.current?.click()} className="px-4 py-2 bg-white border rounded shadow-sm text-xs font-bold">استرجاع</button>
+                                         <button onClick={() => jsonInputRef.current?.click()} className="px-4 py-2 bg-white border rounded shadow-sm text-xs font-bold">استيراد نسخة</button>
                                          <input type="file" ref={jsonInputRef} accept=".json" onChange={handleImportDB} className="hidden" />
                                          <button onClick={() => setDataSubView('upload')} className="bg-slate-900 text-white px-5 py-2 rounded-xl shadow font-bold text-sm flex gap-2 items-center"><Upload size={18}/> استيراد ملف جديد</button>
                                      </div>
                                 </div>
+                                
+                                {syncMessage && (
+                                    <div className="bg-blue-50 text-blue-800 p-3 rounded-xl text-sm font-bold border border-blue-100 flex items-center gap-2 animate-in slide-in-from-top-2">
+                                        <Info size={16}/> {syncMessage}
+                                    </div>
+                                )}
 
                                 <div className="flex bg-white border p-1 rounded-xl shadow-sm w-fit mb-4">
                                     <button onClick={() => setListMode('detailed')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${listMode === 'detailed' ? 'bg-teal-50 text-teal-700' : 'text-slate-500'}`}>الشبكات التفصيلية</button>

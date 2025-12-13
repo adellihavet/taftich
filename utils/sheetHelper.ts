@@ -1,5 +1,5 @@
 
-import { Teacher, ReportData, ObservationItem, LegacyReportOptions } from '../types';
+import { Teacher, ReportData, ObservationItem, LegacyReportOptions, InspectorProfile } from '../types';
 import { DEFAULT_OBSERVATION_TEMPLATE, INITIAL_REPORT_STATE } from '../constants';
 import { MODERN_RANKS, MODERN_DEGREES } from '../modernConstants';
 
@@ -25,7 +25,8 @@ export const normalizeDate = (val: any): string => {
         }
     }
 
-    // Try DD/MM/YYYY
+    // Try DD/MM/YYYY or DD-MM-YYYY
+    // Regex allows / . - as separators
     const parts = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
     if (parts) {
         const d = parts[1].padStart(2, '0');
@@ -52,7 +53,7 @@ export const formatDateForDisplay = (dateStr: string | undefined | null): string
     // Check if it matches YYYY-MM-DD
     if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
         const [year, month, day] = str.split('-');
-        return `${year}/${month}/${day}`;
+        return `${day}/${month}/${year}`;
     }
     
     // If it's already DD-MM-YYYY or DD/MM/YYYY, ensure slashes
@@ -62,31 +63,31 @@ export const formatDateForDisplay = (dateStr: string | undefined | null): string
 // --- SMART NORMALIZATION FUNCTIONS ---
 
 const normalizeRank = (input: string): string => {
-    if (!input) return "أستاذ التعليم الابتدائي";
+    if (!input) return "أستاذ المدرسة الابتدائية";
     const text = input.trim().toLowerCase(); // Normalize input
 
     // 1. أستاذ مميز
     if (text.includes("مميز") || text.includes("متميز")) {
-        return "أستاذ مميز في التعليم الابتدائي";
+        return "أستاذ مميز في المدرسة الابتدائية";
     }
     
     // 2. أستاذ مكون
     if (text.includes("مكون")) {
-        return "أستاذ مكون في التعليم الابتدائي";
+        return "أستاذ مكون في المدرسة الابتدائية";
     }
 
     // 3. قسم ثان (ق2, 2, ثان)
     if (text.includes("ثان") || text.includes("ثاني") || text.includes("ق2") || text.includes("قسم 2") || /\b2\b/.test(text)) {
-        return "أستاذ التعليم الابتدائي قسم ثان";
+        return "أستاذ المدرسة الابتدائية قسم ثان";
     }
 
     // 4. قسم أول (ق1, 1, أول)
     if (text.includes("أول") || text.includes("اول") || text.includes("ق1") || text.includes("قسم 1") || /\b1\b/.test(text)) {
-        return "أستاذ التعليم الابتدائي قسم أول";
+        return "أستاذ المدرسة الابتدائية قسم أول";
     }
 
     // Default
-    return "أستاذ التعليم الابتدائي";
+    return "أستاذ المدرسة الابتدائية";
 };
 
 const normalizeDegree = (input: string): string => {
@@ -158,9 +159,8 @@ export const generateSchoolTemplate = () => {
 
     // --- 2. CREATE WORKBOOK ---
     const wb = XLSX.utils.book_new();
-    wb.Workbook = { Views: [{ RTL: true }] };
-
-    // --- 3. CREATE DATA SHEET (HIDDEN) FIRST ---
+    
+    // --- 3. CREATE DATA SHEET (HIDDEN) ---
     const wsData = XLSX.utils.aoa_to_sheet(dataSheetRows);
     XLSX.utils.book_append_sheet(wb, wsData, "Lists");
 
@@ -171,21 +171,40 @@ export const generateSchoolTemplate = () => {
         "مكان الميلاد",       // C
         "الشهادة",            // D
         "تاريخ الشهادة",      // E
-        "تاريخ التوظيف",      // F
+        "تاريخ التعيين",      // F
         "الرتبة",             // G
         "تاريخ التعيين في الرتبة", // H
-        "الدرجة (رقم)",       // I (Force Text)
+        "الدرجة (رقم)",       // I
         "تاريخ الدرجة",       // J
         "الوضعية",            // K
-        "آخر نقطة تفتيش",     // L (Force Text)
+        "آخر نقطة تفتيش",     // L
         "تاريخ آخر تفتيش",    // M
         "المدرسة الحالية",    // N
         "المستوى المسند"      // O
     ];
 
-    const wsMain = XLSX.utils.aoa_to_sheet([headers]);
+    // Add an example row to guide the user
+    const exampleRow = [
+        "مثال: محمد بن عبد الله", // Name
+        "01/01/1990",           // Birth
+        "الجزائر",               // Place
+        "ليسانس",               // Degree
+        "30/06/2012",           // Degree Date
+        "01/09/2015",           // Recruit
+        "أستاذ المدرسة الابتدائية", // Rank
+        "01/09/2018",           // Rank Date
+        "3",                    // Echelon
+        "01/01/2021",           // Echelon Date
+        "مرسم",                 // Status
+        "15",                   // Mark
+        "15/02/2023",           // Insp Date
+        "مدرسة الأمير عبد القادر", // School
+        "السنة الثالثة"          // Level
+    ];
 
-    // RTL View
+    const wsMain = XLSX.utils.aoa_to_sheet([headers, exampleRow]);
+
+    // Force RTL View for the sheet
     if(!wsMain['!views']) wsMain['!views'] = [];
     wsMain['!views'].push({ rightToLeft: true });
 
@@ -196,39 +215,50 @@ export const generateSchoolTemplate = () => {
         { wch: 15 }, { wch: 10 }, { wch: 15 }, { wch: 25 }, { wch: 20 }
     ];
 
-    // Data Validation
+    // --- DATA VALIDATION (DROPDOWNS) ---
     const rangeLimit = 200; 
 
+    // Dropdowns referencing the "Lists" sheet
     wsMain['!dataValidation'] = [
-        // Removed Dropdown for Degree to allow flexible typing -> Normalized later
-        // { sqref: `D2:D${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$B$2:$B$${degrees.length + 1}`, showDropDown: true },
-        // Removed Dropdown for Rank to allow free typing -> Normalized later
-        // { sqref: `G2:G${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$A$2:$A$${ranks.length + 1}`, showDropDown: true },
-        { sqref: `I2:I${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$D$2:$D$${echelons.length + 1}`, showDropDown: true },
-        { sqref: `K2:K${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$C$2:$C$${status.length + 1}`, showDropDown: true },
-        { sqref: `O2:O${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$E$2:$E$${levels.length + 1}`, showDropDown: true }
+        { sqref: `D2:D${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$B$2:$B$${degrees.length + 1}`, showDropDown: true }, // Degrees
+        { sqref: `G2:G${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$A$2:$A$${ranks.length + 1}`, showDropDown: true }, // Ranks
+        { sqref: `I2:I${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$D$2:$D$${echelons.length + 1}`, showDropDown: true }, // Echelons
+        { sqref: `K2:K${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$C$2:$C$${status.length + 1}`, showDropDown: true }, // Status
+        { sqref: `O2:O${rangeLimit}`, type: 'list', operator: 'equal', formula1: `'Lists'!$E$2:$E$${levels.length + 1}`, showDropDown: true }  // Levels
     ];
 
-    // Format Date Columns as Text to prevent Excel auto-formatting issues
-    const dateCols = [1, 4, 5, 7, 9, 12]; 
+    // --- FORMATTING ---
+    const dateCols = [1, 4, 5, 7, 9, 12]; // B, E, F, H, J, M
     for(let R = 1; R < rangeLimit; ++R) {
-        // Date Columns
+        // Force Text Format for Date Columns
         dateCols.forEach(C => {
             const cellRef = XLSX.utils.encode_cell({c: C, r: R});
-            if(!wsMain[cellRef]) wsMain[cellRef] = { t: 's', v: '' }; 
+            if(!wsMain[cellRef]) wsMain[cellRef] = { t: 's', v: '' }; // Create empty string cell if undefined
+            wsMain[cellRef].z = '@'; // Excel Text Format
         });
 
-        // CRITICAL FIX: Force Echelon (Col I -> 8) and Mark (Col L -> 11) to be TEXT ('s')
-        // This prevents "10" becoming a date.
-        const echelonRef = XLSX.utils.encode_cell({c: 8, r: R});
+        // Force Text Format for Echelon and Mark
+        const echelonRef = XLSX.utils.encode_cell({c: 8, r: R}); // I
         if(!wsMain[echelonRef]) wsMain[echelonRef] = { t: 's', v: '' };
+        wsMain[echelonRef].z = '@';
 
-        const markRef = XLSX.utils.encode_cell({c: 11, r: R});
+        const markRef = XLSX.utils.encode_cell({c: 11, r: R}); // L
         if(!wsMain[markRef]) wsMain[markRef] = { t: 's', v: '' };
+        wsMain[markRef].z = '@';
     }
 
     XLSX.utils.book_append_sheet(wb, wsMain, "معلومات_الأساتذة");
 
+    // --- WORKBOOK PROPERTIES (Configure RTL and Hidden Sheet) ---
+    // This correctly initializes the workbook structure to hide the first sheet
+    wb.Workbook = {
+        Views: [{ RTL: true }],
+        Sheets: [
+            { Hidden: 1 }, // Index 0: "Lists" -> Hidden
+            { Hidden: 0 }  // Index 1: "Main" -> Visible
+        ]
+    };
+    
     return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
 };
 
@@ -236,17 +266,19 @@ export const generateSchoolTemplate = () => {
 export const parseSchoolExcel = (data: ArrayBuffer): { teachers: Teacher[], reports: Record<string, ReportData> } => {
     const workbook = XLSX.read(data, { type: 'array' });
     
-    // Stable Logic: Look for "معلومات_الأساتذة", if not found, take the SECOND sheet (index 1) because Index 0 is "Lists"
+    // Determine which sheet to read. We look for "معلومات_الأساتذة".
     let targetSheetName = "معلومات_الأساتذة";
     if (!workbook.SheetNames.includes(targetSheetName)) {
+        // If not found, try the second sheet (index 1) assuming index 0 might be "Lists"
         if (workbook.SheetNames.length > 1) {
-            targetSheetName = workbook.SheetNames[1]; // Assume Index 1 is data, Index 0 is lists
+            targetSheetName = workbook.SheetNames[1]; 
         } else {
-            targetSheetName = workbook.SheetNames[0]; // Fallback
+            targetSheetName = workbook.SheetNames[0]; 
         }
     }
 
     const worksheet = workbook.Sheets[targetSheetName];
+    // raw: true gets values as stored (strings preferably)
     const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true }); 
     
     if (!rows || rows.length < 2) return { teachers: [], reports: {} };
@@ -254,10 +286,16 @@ export const parseSchoolExcel = (data: ArrayBuffer): { teachers: Teacher[], repo
     const teachers: Teacher[] = [];
     const reports: Record<string, ReportData> = {};
 
-    // Skip header row (index 0)
+    // Skip header row (index 0).
+    // Also, DETECT and SKIP the Example Row if it exists.
+    
     for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
         if (!row || row.length === 0 || !row[0]) continue;
+
+        const fullName = String(row[0]).trim();
+        // Skip Example Row based on keyword "مثال" or "Example"
+        if (fullName.includes("مثال") || fullName.includes("Example")) continue;
 
         const id = generateId();
 
@@ -280,13 +318,13 @@ export const parseSchoolExcel = (data: ArrayBuffer): { teachers: Teacher[], repo
 
         const teacher: Teacher = {
             id: id,
-            fullName: String(row[0]).trim(),
+            fullName: fullName,
             birthDate: normalizeDate(row[1]),
             birthPlace: String(row[2] || '').trim(),
-            degree: normalizedDegree, // Use Normalized
+            degree: normalizedDegree, 
             degreeDate: normalizeDate(row[4]),
             recruitmentDate: normalizeDate(row[5]),
-            rank: normalizedRank, // Use Normalized
+            rank: normalizedRank, 
             currentRankDate: normalizeDate(row[7]),
             echelon: String(row[8] || '').trim(),
             echelonDate: normalizeDate(row[9]),
@@ -307,7 +345,6 @@ export const parseSchoolExcel = (data: ArrayBuffer): { teachers: Teacher[], repo
                     teacherId: id,
                     school: rawSchool,
                     level: normalizedLevel,
-                    // If level exists, we can infer Group or leave empty
                     group: '',
                 };
             }
@@ -320,7 +357,8 @@ export const parseSchoolExcel = (data: ArrayBuffer): { teachers: Teacher[], repo
 export const generateDatabaseRows = (
     teachers: Teacher[], 
     currentReport?: ReportData,
-    reportsMap?: Record<string, ReportData>
+    reportsMap?: Record<string, ReportData>,
+    globalSettings?: InspectorProfile 
 ): (string | number)[][] => {
     const basicHeaders = [
         'ID', 'الاسم_واللقب', 'تاريخ_الميلاد', 'مكان_الميلاد', 'الشهادة', 'تاريخ_الشهادة',
@@ -331,7 +369,7 @@ export const generateDatabaseRows = (
     const reportHeaders = [
         'الولاية', 'المقاطعة', 'المدرسة', 
         'تاريخ_الزيارة', 'المادة', 'الموضوع', 'المدة', 'المستوى', 'الفوج', 
-        'عدد_التلاميذ', 'الغائبون', 'السبورة', 'العلامة_النهائية', 'العلامة_بالحروف', 'توجيهات_التقييم'
+        'عدد_التلاميذ', 'الغائبون', 'نص_التقرير_العام', 'العلامة_النهائية', 'العلامة_بالحروف', 'توجيهات_التقييم'
     ];
 
     const legacyHeaders = [
@@ -340,7 +378,7 @@ export const generateDatabaseRows = (
         'الحالة_العائلية', 'معهد_التكوين', 'تاريخ_التخرج_من_المعهد', 'تاريخ_المؤهل_العلمي', 
         'السنة_الدراسية', 'الدائرة', 'البلدية',
         'القاعة_استماع', 'الإضاءة', 'التدفئة', 'التهوية', 'النظافة', 
-        'إعداد_الدروس', 'قيمة_الإعداد', 'وسائل_أخرى', 'السبورة', 'التوزيع_والمعلقات', 
+        'إعداد_الدروس', 'قيمة_الإعداد', 'وسائل_أخرى', 'السبورة_كلاسيكي', 'التوزيع_والمعلقات', 
         'السجلات', 'السجلات_مستعملة', 'السجلات_مراقبة', 
         'البرامج_المقررة', 'التدرج', 'الواجبات',
         'تسلسل_الدروس', 'قيمة_المعلومات', 'تحقق_الأهداف', 'مشاركة_التلاميذ', 
@@ -357,17 +395,17 @@ export const generateDatabaseRows = (
 
     const allHeaders = [...basicHeaders, ...reportHeaders, ...legacyHeaders, ...obsHeaders];
 
-    // Variables to hold the "Last Known Good Value" for fill-down logic
-    let lastWilaya = '';
-    let lastDistrict = '';
+    let lastWilaya = globalSettings?.wilaya || '';
+    let lastDistrict = globalSettings?.district || '';
+    let lastInspector = globalSettings?.fullName || '';
     
-    // First pass to find any global values if they exist
     if (currentReport?.wilaya) lastWilaya = currentReport.wilaya;
     if (currentReport?.district) lastDistrict = currentReport.district;
+    if (currentReport?.inspectorName) lastInspector = currentReport.inspectorName;
 
     const rows = teachers.map(t => {
         if(!t) return []; 
-        let r: ReportData = INITIAL_REPORT_STATE;
+        let r: ReportData = { ...INITIAL_REPORT_STATE, teacherId: t.id };
         let hasReport = false;
 
         if (currentReport && currentReport.teacherId === t.id) {
@@ -378,13 +416,13 @@ export const generateDatabaseRows = (
             hasReport = true;
         }
 
-        // Fill Down Logic: Update tracking variables if current row has data
         if (r.wilaya) lastWilaya = r.wilaya;
         if (r.district) lastDistrict = r.district;
+        if (r.inspectorName) lastInspector = r.inspectorName;
 
-        // Use tracked variables if current row is empty
-        const effectiveWilaya = r.wilaya || lastWilaya;
-        const effectiveDistrict = r.district || lastDistrict;
+        const effectiveWilaya = r.wilaya || lastWilaya || globalSettings?.wilaya || '';
+        const effectiveDistrict = r.district || lastDistrict || globalSettings?.district || '';
+        const effectiveInspector = r.inspectorName || lastInspector || globalSettings?.fullName || '';
 
         const ld = r.legacyData || INITIAL_REPORT_STATE.legacyData!;
 
@@ -394,10 +432,12 @@ export const generateDatabaseRows = (
             t.lastInspectionDate || '', t.lastMark || '', t.status || '', t.tenureDate || ''
         ];
 
+        // FIXED: Always write the school name if it exists in the report object, even if hasReport is weak.
+        // Also used specific 'generalAssessment' instead of potentially conflicting names.
         const reportData = [
             effectiveWilaya,
             effectiveDistrict,
-            hasReport ? r.school : '',
+            r.school || '', // Always persist school
             hasReport ? r.inspectionDate : '',
             hasReport ? r.subject : '',
             hasReport ? r.topic : '',
@@ -414,7 +454,7 @@ export const generateDatabaseRows = (
 
         const legacyDataCols = [
             hasReport ? (r.reportModel || 'modern') : 'modern',
-            hasReport ? (r.inspectorName || '') : '',
+            effectiveInspector,
             hasReport ? ld.familyStatus : '',
             hasReport ? ld.trainingInstitute : '',
             hasReport ? ld.trainingDate : '',
@@ -430,7 +470,7 @@ export const generateDatabaseRows = (
             hasReport ? ld.lessonPreparation : '',
             hasReport ? ld.preparationValue : '',
             hasReport ? ld.otherAids : '',
-            hasReport ? ld.boardWork : '',
+            hasReport ? ld.boardWork : '', // Legacy board
             hasReport ? ld.documentsAndPosters : '',
             hasReport ? ld.registers : '',
             hasReport ? ld.registersUsed : '',
@@ -471,14 +511,32 @@ export const generateDatabaseRows = (
     return [allHeaders, ...rows];
 };
 
+/**
+ * Robust Parsing Function using Header Mapping
+ */
 export const parseDatabaseRows = (values: any[][]): { teachers: Teacher[], reportsMap: Record<string, ReportData> } => {
     if (!values || values.length < 2) return { teachers: [], reportsMap: {} };
 
     const headerRow = values[0];
-    const isLatestSchema = headerRow[14] && String(headerRow[14]).includes('تثبيت');
-    const offset = isLatestSchema ? 1 : 0;
-    const isNewFormat = headerRow[29 + offset] && (String(headerRow[29 + offset]).includes('نوع_التقرير') || String(headerRow[29 + offset]).includes('Legacy'));
-    const isLatestLegacyFormat = isNewFormat && (String(headerRow[51 + offset]).includes('البرامج') || String(headerRow[51 + offset]).includes('scheduled'));
+    
+    // Create Header Map (Name -> Index)
+    const headers: Record<string, number> = {};
+    headerRow.forEach((h, idx) => {
+        if(typeof h === 'string') {
+            headers[h.trim()] = idx;
+        }
+    });
+
+    // Helper to get value by header name OR default index (fallback)
+    const getVal = (row: any[], headerName: string, defaultIdx: number): string => {
+        let idx = headers[headerName];
+        if (idx === undefined) idx = defaultIdx;
+        
+        const val = row[idx];
+        if (val === undefined || val === null) return '';
+        if (typeof val === 'object') return JSON.stringify(val);
+        return String(val).trim();
+    };
 
     const teachers: Teacher[] = [];
     const reportsMap: Record<string, ReportData> = {};
@@ -487,129 +545,133 @@ export const parseDatabaseRows = (values: any[][]): { teachers: Teacher[], repor
         const row = values[i];
         if (!row || row.length === 0) continue;
 
-        const getVal = (idx: number): string => {
-            const val = row[idx];
-            if (val === undefined || val === null) return '';
-            if (typeof val === 'object') return JSON.stringify(val);
-            return String(val).trim();
-        };
+        // Skip rows without name
+        if (!getVal(row, 'الاسم_واللقب', 1)) continue;
 
-        if (!getVal(1)) continue;
-
-        const id = getVal(0) || generateId();
+        const id = getVal(row, 'ID', 0) || generateId();
         
         const teacher: Teacher = {
             id: id,
-            fullName: getVal(1),
-            birthDate: normalizeDate(getVal(2)),
-            birthPlace: getVal(3),
-            degree: getVal(4),
-            degreeDate: normalizeDate(getVal(5)),
-            recruitmentDate: normalizeDate(getVal(6)),
-            rank: getVal(7),
-            currentRankDate: normalizeDate(getVal(8)),
-            echelon: getVal(9),
-            echelonDate: normalizeDate(getVal(10)),
-            lastInspectionDate: normalizeDate(getVal(11)),
-            lastMark: parseFloat(getVal(12)) || 10,
-            status: normalizeStatus(getVal(13)) as 'titulaire' | 'contractuel' | 'stagiere',
-            tenureDate: isLatestSchema ? normalizeDate(getVal(14)) : ''
+            fullName: getVal(row, 'الاسم_واللقب', 1),
+            birthDate: normalizeDate(getVal(row, 'تاريخ_الميلاد', 2)),
+            birthPlace: getVal(row, 'مكان_الميلاد', 3),
+            degree: getVal(row, 'الشهادة', 4),
+            degreeDate: normalizeDate(getVal(row, 'تاريخ_الشهادة', 5)),
+            recruitmentDate: normalizeDate(getVal(row, 'تاريخ_التوظيف', 6)),
+            rank: getVal(row, 'الرتبة', 7),
+            currentRankDate: normalizeDate(getVal(row, 'تاريخ_الرتبة', 8)),
+            echelon: getVal(row, 'الدرجة', 9),
+            echelonDate: normalizeDate(getVal(row, 'تاريخ_الدرجة', 10)),
+            lastInspectionDate: normalizeDate(getVal(row, 'تاريخ_آخر_تفتيش', 11)),
+            lastMark: parseFloat(getVal(row, 'النقطة_السابقة', 12)) || 10,
+            status: normalizeStatus(getVal(row, 'الوضعية', 13)) as 'titulaire' | 'contractuel' | 'stagiere',
+            tenureDate: normalizeDate(getVal(row, 'تاريخ_التثبيت', 14))
         };
         teachers.push(teacher);
 
-        const hasReportData = getVal(14 + offset) || getVal(18 + offset); 
+        // Always attempt to restore report data (especially School Name) even if not visited
+        // FIX: Removed "if (inspectionDate)" check to ensure school name persists
+        const reportType = getVal(row, 'نوع_التقرير', 29) || 'modern';
+        
+        let legacyData: LegacyReportOptions;
 
-        if (hasReportData) { 
-            let legacyData: LegacyReportOptions;
-            let obsStartIndex = 65 + offset;
-
-            if (isLatestLegacyFormat) {
-                legacyData = {
-                    familyStatus: getVal(31 + offset),
-                    trainingInstitute: getVal(32 + offset),
-                    trainingDate: normalizeDate(getVal(33 + offset)),
-                    graduationDate: normalizeDate(getVal(34 + offset)),
-                    schoolYear: getVal(35 + offset),
-                    daira: getVal(36 + offset),
-                    municipality: getVal(37 + offset),
-                    classroomListening: getVal(38 + offset),
-                    lighting: getVal(39 + offset),
-                    heating: getVal(40 + offset),
-                    ventilation: getVal(41 + offset),
-                    cleanliness: getVal(42 + offset),
-                    lessonPreparation: getVal(43 + offset),
-                    preparationValue: getVal(44 + offset),
-                    otherAids: getVal(45 + offset),
-                    boardWork: getVal(46 + offset),
-                    documentsAndPosters: getVal(47 + offset),
-                    registers: getVal(48 + offset),
-                    registersUsed: getVal(49 + offset),
-                    registersMonitored: getVal(50 + offset),
-                    scheduledPrograms: getVal(51 + offset),
-                    progression: getVal(52 + offset),
-                    duties: getVal(53 + offset),
-                    lessonExecution: getVal(54 + offset),
-                    informationValue: getVal(55 + offset),
-                    objectivesAchieved: getVal(56 + offset),
-                    studentParticipation: getVal(57 + offset),
-                    applications: getVal(58 + offset),
-                    applicationsSuitability: getVal(59 + offset),
-                    notebooksCare: getVal(60 + offset),
-                    notebooksMonitored: getVal(61 + offset),
-                    homeworkCorrection: getVal(62 + offset),
-                    homeworkValue: getVal(63 + offset),
-                    generalAppreciation: getVal(64 + offset)
-                };
-                obsStartIndex = 65 + offset;
-            } else if (isNewFormat) {
-                legacyData = { ...INITIAL_REPORT_STATE.legacyData! };
-                obsStartIndex = 62 + offset;
-            } else {
-                legacyData = { ...INITIAL_REPORT_STATE.legacyData! }; 
-                obsStartIndex = 29;
-            }
-
-            const observations = JSON.parse(JSON.stringify(DEFAULT_OBSERVATION_TEMPLATE));
-            
-            let obsIndex = obsStartIndex; 
-            observations.forEach((obs: ObservationItem) => {
-                const scoreVal = getVal(obsIndex);
-                const noteVal = getVal(obsIndex + 1);
-                
-                if (scoreVal === '0' || scoreVal === '1' || scoreVal === '2') {
-                    obs.score = parseInt(scoreVal) as 0 | 1 | 2;
-                } else {
-                    obs.score = null;
-                }
-                
-                obs.improvementNotes = noteVal || '';
-                obsIndex += 2;
-            });
-
-            reportsMap[id] = {
-                id: generateId(), 
-                teacherId: id,
-                reportModel: isNewFormat ? (getVal(29 + offset) === 'legacy' ? 'legacy' : 'modern') : 'modern',
-                inspectorName: isNewFormat ? getVal(30 + offset) : '',
-                wilaya: getVal(14 + offset),
-                district: getVal(15 + offset),
-                school: getVal(16 + offset),
-                inspectionDate: normalizeDate(getVal(17 + offset)),
-                subject: getVal(18 + offset),
-                topic: getVal(19 + offset),
-                duration: getVal(20 + offset),
-                level: getVal(21 + offset),
-                group: getVal(22 + offset),
-                studentCount: parseInt(getVal(23 + offset)) || 0,
-                absentCount: parseInt(getVal(24 + offset)) || 0,
-                generalAssessment: getVal(25 + offset),
-                finalMark: parseFloat(getVal(26 + offset)) || 0,
-                markInLetters: getVal(27 + offset),
-                assessmentKeywords: getVal(28 + offset),
-                observations: observations,
-                legacyData: legacyData
+        if (reportType === 'legacy') {
+            legacyData = {
+                familyStatus: getVal(row, 'الحالة_العائلية', 31),
+                trainingInstitute: getVal(row, 'معهد_التكوين', 32),
+                trainingDate: normalizeDate(getVal(row, 'تاريخ_التخرج_من_المعهد', 33)),
+                graduationDate: normalizeDate(getVal(row, 'تاريخ_المؤهل_العلمي', 34)),
+                schoolYear: getVal(row, 'السنة_الدراسية', 35),
+                daira: getVal(row, 'الدائرة', 36),
+                municipality: getVal(row, 'البلدية', 37),
+                classroomListening: getVal(row, 'القاعة_استماع', 38),
+                lighting: getVal(row, 'الإضاءة', 39),
+                heating: getVal(row, 'التدفئة', 40),
+                ventilation: getVal(row, 'التهوية', 41),
+                cleanliness: getVal(row, 'النظافة', 42),
+                lessonPreparation: getVal(row, 'إعداد_الدروس', 43),
+                preparationValue: getVal(row, 'قيمة_الإعداد', 44),
+                otherAids: getVal(row, 'وسائل_أخرى', 45),
+                boardWork: getVal(row, 'السبورة_كلاسيكي', 46), // FIX: Mapped to distinct legacy column
+                documentsAndPosters: getVal(row, 'التوزيع_والمعلقات', 47),
+                registers: getVal(row, 'السجلات', 48),
+                registersUsed: getVal(row, 'السجلات_مستعملة', 49),
+                registersMonitored: getVal(row, 'السجلات_مراقبة', 50),
+                scheduledPrograms: getVal(row, 'البرامج_المقررة', 51),
+                progression: getVal(row, 'التدرج', 52),
+                duties: getVal(row, 'الواجبات', 53),
+                lessonExecution: getVal(row, 'تسلسل_الدروس', 54),
+                informationValue: getVal(row, 'قيمة_المعلومات', 55),
+                objectivesAchieved: getVal(row, 'تحقق_الأهداف', 56),
+                studentParticipation: getVal(row, 'مشاركة_التلاميذ', 57),
+                applications: getVal(row, 'التطبيقات', 58),
+                applicationsSuitability: getVal(row, 'ملاءمة_التطبيقات', 59),
+                notebooksCare: getVal(row, 'العناية_بالدفاتر', 60),
+                notebooksMonitored: getVal(row, 'مراقبة_الدفاتر', 61),
+                homeworkCorrection: getVal(row, 'تصحيح_الواجبات', 62),
+                homeworkValue: getVal(row, 'قيمة_التصحيح', 63),
+                generalAppreciation: getVal(row, 'التقدير_العام_الكلاسيكي', 64)
             };
+        } else {
+            legacyData = { ...INITIAL_REPORT_STATE.legacyData! };
         }
+
+        const observations = JSON.parse(JSON.stringify(DEFAULT_OBSERVATION_TEMPLATE));
+        
+        observations.forEach((obs: ObservationItem) => {
+            const scoreKey = `معيار_${obs.id}_التقييم`;
+            const noteKey = `معيار_${obs.id}_ملاحظات`;
+            
+            let scoreIdx = headers[scoreKey];
+            let noteIdx = headers[noteKey];
+
+            const scoreVal = scoreIdx !== undefined ? row[scoreIdx] : '';
+            const noteVal = noteIdx !== undefined ? row[noteIdx] : '';
+            
+            if (scoreVal === '0' || scoreVal === '1' || scoreVal === '2' || scoreVal === 0 || scoreVal === 1 || scoreVal === 2) {
+                obs.score = parseInt(scoreVal) as 0 | 1 | 2;
+            } else {
+                obs.score = null;
+            }
+            
+            obs.improvementNotes = noteVal || '';
+        });
+
+        // SMART RECOVERY LOGIC:
+        // Try to read 'نص_التقرير_العام'. If empty/missing, check if 'السبورة' exists and has content (backward compatibility)
+        let generalAssessment = getVal(row, 'نص_التقرير_العام', 26);
+        if (!generalAssessment || generalAssessment.trim() === '') {
+            // Check legacy column name if it exists in the header map
+            const legacyBoardIdx = headers['السبورة'];
+            if (legacyBoardIdx !== undefined) {
+                const legacyVal = row[legacyBoardIdx];
+                if (legacyVal) generalAssessment = String(legacyVal).trim();
+            }
+        }
+
+        reportsMap[id] = {
+            id: generateId(), 
+            teacherId: id,
+            reportModel: reportType === 'legacy' ? 'legacy' : 'modern',
+            inspectorName: getVal(row, 'اسم_المفتش', 30),
+            wilaya: getVal(row, 'الولاية', 15),
+            district: getVal(row, 'المقاطعة', 16),
+            school: getVal(row, 'المدرسة', 17), // FIX: School persists now
+            inspectionDate: normalizeDate(getVal(row, 'تاريخ_الزيارة', 18)),
+            subject: getVal(row, 'المادة', 19),
+            topic: getVal(row, 'الموضوع', 20),
+            duration: getVal(row, 'المدة', 21),
+            level: getVal(row, 'المستوى', 22),
+            group: getVal(row, 'الفوج', 23),
+            studentCount: parseInt(getVal(row, 'عدد_التلاميذ', 24)) || 0,
+            absentCount: parseInt(getVal(row, 'الغائبون', 25)) || 0,
+            generalAssessment: generalAssessment, // Updated logic
+            finalMark: parseFloat(getVal(row, 'العلامة_النهائية', 27)) || 0,
+            markInLetters: getVal(row, 'العلامة_بالحروف', 28),
+            assessmentKeywords: getVal(row, 'توجيهات_التقييم', 29),
+            observations: observations,
+            legacyData: legacyData
+        };
     }
 
     return { teachers, reportsMap };

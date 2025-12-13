@@ -1,3 +1,4 @@
+
 import { ReportData, Teacher, QuarterlyReportData } from './types';
 import { DEFAULT_OBSERVATION_TEMPLATE } from './modernConstants';
 import { DEFAULT_LEGACY_DATA } from './legacyConstants';
@@ -53,6 +54,9 @@ export const INITIAL_QUARTERLY_REPORT_STATE: QuarterlyReportData = {
     visitsTenure: 0,
     visitsTraining: 0,
     visitsTrainingBenefit: 0,
+    
+    visitsMorning: 0,
+    visitsEvening: 0,
     
     tasksInvestigations: 0,
     tasksSupervision: 0,
