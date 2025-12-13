@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState } from 'react';
 import { Teacher, ReportData } from '../types';
 import { Users, School, GraduationCap, TrendingUp, CheckCircle2, Award, Radar, Trophy, TrendingDown, AlertTriangle, BookOpen, Briefcase, Zap, GitCompare, MonitorSmartphone, ShieldCheck, PenTool, ChevronLeft, Building2, MapPin, Target, LayoutList, LayoutGrid, FileText, PieChart, BarChart3, CheckSquare, Calendar, Lightbulb, ClipboardList, Presentation, ScrollText, PenLine } from 'lucide-react';
@@ -461,13 +460,14 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ teachers, reportsMap, o
                 </div>
 
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow">
-                    <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">متوسط النقاط</p>
+                    <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">عدد المدارس</p>
                     <div className="flex items-end gap-2">
-                        <span className="text-3xl font-bold text-indigo-600">{avgMark}</span>
-                        <span className="text-sm text-slate-400 mb-1">/ 20</span>
+                        <span className="text-3xl font-bold text-purple-600">{uniqueSchools}</span>
+                        <span className="text-sm text-slate-400 mb-1">مؤسسة</span>
                     </div>
-                    <div className="w-full bg-slate-100 rounded-full h-1.5 mt-4 overflow-hidden">
-                        <div className={`h-full rounded-full ${parseFloat(avgMark) >= 15 ? 'bg-emerald-500' : parseFloat(avgMark) >= 12 ? 'bg-indigo-500' : 'bg-orange-500'}`} style={{ width: `${(parseFloat(avgMark) / 20) * 100}%` }}></div>
+                    <div className="mt-4 flex items-center gap-2 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded w-fit">
+                        <School size={12}/>
+                        <span>إحصاء المؤسسات</span>
                     </div>
                 </div>
 

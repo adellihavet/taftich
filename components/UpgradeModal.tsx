@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { Crown, Check, X, Star, Sparkles, CreditCard, Facebook, Send, Phone, ShieldCheck, Upload, Loader2, AlertCircle, Copy, Clock } from 'lucide-react';
+import { Crown, Check, X, Star, Sparkles, CreditCard, Facebook, Send, Phone, ShieldCheck, Upload, Loader2, AlertCircle, Copy, Clock, AlertTriangle } from 'lucide-react';
 import { initiateChargilyPayment, submitManualPayment } from '../services/subscriptionService';
 import { PlanType } from '../types';
 
@@ -203,20 +203,35 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, onUpgrade,
 
             <div className="mb-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 {paymentMethod === 'chargily' ? (
-                    <div className="text-center p-8 bg-slate-50 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center gap-4 hover:bg-slate-100 transition-colors">
-                        <img 
-                            src="https://pay.chargily.com/test/images/logo.svg" 
-                            alt="Chargily Pay" 
-                            className="h-12 w-auto mb-2 opacity-90"
-                        />
-                        <div className="text-sm text-slate-600 max-w-sm">
-                            <p className="font-bold mb-1">دفع آمن وفوري</p>
-                            <p className="text-xs">سيتم فتح نافذة جديدة للدفع عبر بوابة Chargily الآمنة.</p>
+                    <div className="space-y-4">
+                        {/* WARNING ALERT */}
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3 text-right animate-in slide-in-from-top-2">
+                            <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={20} />
+                            <div>
+                                <h4 className="text-amber-800 font-bold text-sm mb-1">تنبيه هام قبل الدفع:</h4>
+                                <p className="text-amber-700 text-xs leading-relaxed">
+                                    في صفحة الدفع، يرجى كتابة <strong>نفس البريد الإلكتروني</strong> الذي سجلت به في المنصة.
+                                    <br/>
+                                    هذا ضروري لربط عملية الدفع بحسابك وتفعيله آلياً، أو لتسهيل التفعيل اليدوي في حال حدوث أي خلل تقني.
+                                </p>
+                            </div>
                         </div>
-                        <div className="flex gap-2 mt-2">
-                            <div className="h-6 w-10 bg-white rounded border flex items-center justify-center shadow-sm"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/16/Former_Visa_%28company%29_logo.svg/300px-Former_Visa_%28company%29_logo.svg.png" className="h-2 object-contain" alt=""/></div>
-                             <div className="h-6 w-10 bg-white rounded border flex items-center justify-center shadow-sm"><span className="text-[8px] font-bold text-blue-800">CIB</span></div>
-                            <div className="h-6 w-10 bg-white rounded border flex items-center justify-center shadow-sm"><span className="text-[8px] font-bold text-yellow-600">EDAHABIA</span></div>
+
+                        <div className="text-center p-8 bg-slate-50 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center gap-4 hover:bg-slate-100 transition-colors">
+                            <img 
+                                src="https://pay.chargily.com/test/images/logo.svg" 
+                                alt="Chargily Pay" 
+                                className="h-12 w-auto mb-2 opacity-90"
+                            />
+                            <div className="text-sm text-slate-600 max-w-sm">
+                                <p className="font-bold mb-1">دفع آمن وفوري</p>
+                                <p className="text-xs">سيتم فتح نافذة جديدة للدفع عبر بوابة Chargily الآمنة.</p>
+                            </div>
+                            <div className="flex gap-2 mt-2">
+                                <div className="h-6 w-10 bg-white rounded border flex items-center justify-center shadow-sm"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/16/Former_Visa_%28company%29_logo.svg/300px-Former_Visa_%28company%29_logo.svg.png" className="h-2 object-contain" alt=""/></div>
+                                <div className="h-6 w-10 bg-white rounded border flex items-center justify-center shadow-sm"><span className="text-[8px] font-bold text-blue-800">CIB</span></div>
+                                <div className="h-6 w-10 bg-white rounded border flex items-center justify-center shadow-sm"><span className="text-[8px] font-bold text-yellow-600">EDAHABIA</span></div>
+                            </div>
                         </div>
                     </div>
                 ) : (

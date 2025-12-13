@@ -3,8 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { fetchPendingRequests, approveSubscription, rejectSubscription } from '../../services/subscriptionService';
 import { fetchSeminars, addSeminar, deleteSeminar, RemoteSeminar } from '../../services/supabaseService';
 import { UserProfile } from '../../types';
-import { Check, X, Eye, Shield, Users, RefreshCw, AlertCircle, Calendar, Presentation, Plus, Trash2, Link } from 'lucide-react';
-import SupabaseSQL_CopyMe from '../SupabaseSQL_CopyMe';
+import { Check, X, Eye, Shield, Users, RefreshCw, AlertCircle, Calendar, Presentation, Plus, Trash2, Link, Database, Code2 } from 'lucide-react';
+import BackendSetupGuide from './BackendSetupGuide'; // Import the new guide
 
 const AdminDashboard: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'subs' | 'content' | 'setup'>('subs');
@@ -148,21 +148,21 @@ const AdminDashboard: React.FC = () => {
                     <div className="flex bg-white/10 p-1 rounded-xl backdrop-blur-sm z-10">
                         <button 
                             onClick={() => setActiveTab('subs')}
-                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'subs' ? 'bg-white text-slate-900 shadow' : 'text-slate-300 hover:bg-white/10'}`}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'subs' ? 'bg-white text-slate-900 shadow' : 'text-slate-300 hover:bg-white/10'}`}
                         >
-                            الاشتراكات ({requests.length})
+                            <Users size={16}/> الاشتراكات ({requests.length})
                         </button>
                         <button 
                             onClick={() => setActiveTab('content')}
-                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'content' ? 'bg-white text-slate-900 shadow' : 'text-slate-300 hover:bg-white/10'}`}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'content' ? 'bg-white text-slate-900 shadow' : 'text-slate-300 hover:bg-white/10'}`}
                         >
-                            إدارة العروض
+                            <Presentation size={16}/> إدارة العروض
                         </button>
                          <button 
                             onClick={() => setActiveTab('setup')}
-                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'setup' ? 'bg-white text-slate-900 shadow' : 'text-slate-300 hover:bg-white/10'}`}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'setup' ? 'bg-white text-slate-900 shadow' : 'text-slate-300 hover:bg-white/10'}`}
                         >
-                            الإعدادات
+                            <Code2 size={16}/> الربط التقني
                         </button>
                     </div>
                 </div>
@@ -355,10 +355,10 @@ const AdminDashboard: React.FC = () => {
                     </div>
                 )}
                 
-                {/* --- SETUP TAB --- */}
+                {/* --- SETUP TAB (NEW) --- */}
                 {activeTab === 'setup' && (
-                    <div className="animate-in fade-in">
-                        <SupabaseSQL_CopyMe />
+                    <div className="animate-in fade-in h-full">
+                        <BackendSetupGuide />
                     </div>
                 )}
 
