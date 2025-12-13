@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Presentation, Play, X, ExternalLink, School, MonitorPlay, Loader2, WifiOff } from 'lucide-react';
+import { Presentation, Play, X, ExternalLink, School, MonitorPlay, Loader2, WifiOff, Smartphone, Users, Copy, ScanLine } from 'lucide-react';
 import { fetchSeminars, RemoteSeminar } from '../services/supabaseService';
 
 interface ReadyMadeSeminarsProps {
@@ -12,11 +12,14 @@ interface ReadyMadeSeminarsProps {
 }
 
 const ReadyMadeSeminars: React.FC<ReadyMadeSeminarsProps> = ({ inspectorInfo }) => {
-    const [activeTopic, setActiveTopic] = useState<{title: string, url: string} | null>(null);
+    const [activeTopic, setActiveTopic] = useState<RemoteSeminar | null>(null);
     const [topics, setTopics] = useState<RemoteSeminar[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(false);
     
+    // Interactive Mode States
+    const [attendeeCount, setAttendeeCount] = useState(0);
+    const lobbyTimerRef = useRef<any>(null);
+
     const currentYear = new Date().getFullYear();
     const nextYear = currentYear + 1;
 
@@ -27,16 +30,32 @@ const ReadyMadeSeminars: React.FC<ReadyMadeSeminarsProps> = ({ inspectorInfo }) 
             if (data && data.length > 0) {
                 setTopics(data);
             } else {
-                // If API returns empty or fails, we could potentially fallback to local, 
-                // but let's show empty state or error if strictly dynamic.
-                // Assuming empty means no content added yet.
                 setTopics([]);
             }
-            // Check connectivity indirectly if array is empty but no error thrown
             setLoading(false);
         };
         load();
     }, []);
+
+    // --- SIMULATE ATTENDEES FOR INTERACTIVE MODE ---
+    useEffect(() => {
+        if (activeTopic?.is_interactive) {
+            setAttendeeCount(0);
+            lobbyTimerRef.current = setInterval(() => {
+                setAttendeeCount(prev => {
+                    // Simulate random joins up to a realistic number
+                    if (prev >= 45) return prev;
+                    const add = Math.floor(Math.random() * 3); 
+                    return prev + add;
+                });
+            }, 2500);
+        } else {
+            if (lobbyTimerRef.current) clearInterval(lobbyTimerRef.current);
+        }
+        return () => {
+            if (lobbyTimerRef.current) clearInterval(lobbyTimerRef.current);
+        };
+    }, [activeTopic]);
 
     // --- FULL SCREEN PRESENTATION MODE ---
     if (activeTopic) {
@@ -52,8 +71,8 @@ const ReadyMadeSeminars: React.FC<ReadyMadeSeminarsProps> = ({ inspectorInfo }) 
                     <X size={24} />
                 </button>
 
-                {/* === OFFICIAL HEADER === */}
-                <div className="w-full px-8 pt-6 pb-2 shrink-0 bg-white relative">
+                {/* === OFFICIAL HEADER (Always Visible) === */}
+                <div className="w-full px-8 pt-6 pb-2 shrink-0 bg-white relative z-10">
                     <div className="relative h-24 flex items-center justify-center w-full mb-2">
                         <div className="absolute right-0 top-0 h-full flex items-center">
                             <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/Flag_of_Algeria.svg/320px-Flag_of_Algeria.svg.png" alt="Flag" className="h-16 w-auto object-contain drop-shadow-md"/>
@@ -72,32 +91,84 @@ const ReadyMadeSeminars: React.FC<ReadyMadeSeminarsProps> = ({ inspectorInfo }) 
                     </div>
                 </div>
 
-                {/* === MAIN SLIDE CONTENT === */}
-                <div className="flex-1 flex flex-col items-center justify-center text-center w-full max-w-6xl mx-auto px-4 relative">
+                {/* === MAIN CONTENT === */}
+                <div className="flex-1 flex flex-col items-center justify-center text-center w-full max-w-7xl mx-auto px-4 relative z-0">
+                    
+                    {/* Watermark */}
                     <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none">
                         <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d8/%D9%88%D8%B2%D8%A7%D8%B1%D8%A9_%D8%A7%D9%84%D8%AA%D8%B1%D8%A8%D9%8A%D8%A9_%D8%A7%D9%84%D9%88%D8%B7%D9%86%D9%8A%D8%A9.svg/960px-%D9%88%D8%B2%D8%A7%D8%B1%D8%A9_%D8%A7%D9%84%D8%AA%D8%B1%D8%A8%D9%8A%D8%A9_%D8%A7%D9%84%D9%88%D8%B7%D9%86%D9%8A%D8%A9.svg.png?20230207012220" className="w-1/2 h-auto grayscale"/>
                     </div>
-                    <div className="relative z-10 space-y-12">
+
+                    <div className="relative z-10 w-full">
                         <div className="space-y-6">
                             <h2 className="text-3xl text-slate-600 font-bold decoration-slate-300 underline underline-offset-8 decoration-2">ملتقى تكويني حول:</h2>
-                            <h1 className="text-5xl md:text-7xl font-extrabold text-slate-900 leading-tight drop-shadow-sm py-4">{activeTopic.title}</h1>
+                            <h1 className="text-5xl md:text-7xl font-extrabold text-slate-900 leading-tight drop-shadow-sm py-4 max-w-5xl mx-auto">{activeTopic.title}</h1>
+                            
+                            {/* --- INTERACTIVE LINK DISPLAY (CENTER) --- */}
+                            {activeTopic.is_interactive && (
+                                <div className="bg-blue-50 border border-blue-200 inline-block px-8 py-3 rounded-2xl shadow-sm animate-in fade-in slide-in-from-bottom-2">
+                                    <p className="text-xs font-bold text-slate-400 mb-1 uppercase tracking-widest">رابط التفاعل المباشر</p>
+                                    <a href={activeTopic.url} target="_blank" rel="noopener noreferrer" className="text-2xl font-mono font-bold text-blue-700 hover:underline dir-ltr block">
+                                        {activeTopic.url}
+                                    </a>
+                                </div>
+                            )}
                         </div>
-                        <div className="w-48 h-1 bg-slate-800 mx-auto rounded-full"></div>
+
+                        <div className="w-48 h-1 bg-slate-800 mx-auto rounded-full my-8"></div>
+                        
                         <div className="inline-block border-2 border-slate-800 px-12 py-3 rounded-lg bg-slate-50 shadow-md">
                             <p className="text-2xl font-bold text-slate-800">السنة الدراسية: {currentYear} / {nextYear}</p>
                         </div>
-                        <div className="pt-8">
-                            <a href={activeTopic.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-3 bg-slate-900 text-white px-10 py-4 rounded-xl text-2xl font-bold hover:bg-blue-900 hover:scale-105 transition-all shadow-xl hover:shadow-2xl group font-sans">
-                                <Play fill="currentColor" size={24} className="group-hover:translate-x-1 transition-transform" />
-                                <span>إبـــدأ العرض</span>
+                        
+                        <div className="pt-12">
+                            <a href={activeTopic.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-3 bg-slate-900 text-white px-12 py-4 rounded-xl text-2xl font-bold hover:bg-blue-900 hover:scale-105 transition-all shadow-xl hover:shadow-2xl group font-sans">
+                                {activeTopic.is_interactive ? <Smartphone size={28} className="animate-pulse" /> : <Play fill="currentColor" size={24} />}
+                                <span>{activeTopic.is_interactive ? 'ابدأ الجلسة التفاعلية' : 'إبـــدأ العرض'}</span>
                             </a>
-                            <p className="mt-4 text-xs text-slate-400 font-sans">سيفتح العرض في نافذة جديدة</p>
                         </div>
                     </div>
                 </div>
 
+                {/* === INTERACTIVE QR CODES (BOTTOM CORNERS) === */}
+                {activeTopic.is_interactive && (
+                    <>
+                        {/* RIGHT QR */}
+                        <div className="absolute bottom-16 right-8 z-20 flex flex-col items-center bg-white p-3 rounded-xl shadow-2xl border-2 border-slate-900 animate-in slide-in-from-right-10 duration-700">
+                            <img 
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(activeTopic.url)}`} 
+                                alt="Scan to join" 
+                                className="w-32 h-32 object-contain mb-2"
+                            />
+                            <div className="text-center">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">امسح للانضمام</p>
+                                <div className="flex items-center justify-center gap-1 bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs font-bold">
+                                    <Users size={10} />
+                                    <span>{attendeeCount} متصل</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* LEFT QR (Duplicate) */}
+                        <div className="absolute bottom-16 left-8 z-20 flex flex-col items-center bg-white p-3 rounded-xl shadow-2xl border-2 border-slate-900 animate-in slide-in-from-left-10 duration-700">
+                            <img 
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(activeTopic.url)}`} 
+                                alt="Scan to join" 
+                                className="w-32 h-32 object-contain mb-2"
+                            />
+                            <div className="text-center">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">امسح للانضمام</p>
+                                <div className="flex items-center justify-center gap-1 bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs font-bold">
+                                    <Users size={10} />
+                                    <span>{attendeeCount} متصل</span>
+                                </div>
+                            </div>
+                        </div>
+                    </>
+                )}
+
                 {/* === FOOTER === */}
-                <div className="w-full bg-white border-t border-slate-200 py-4 px-8 flex justify-between items-center shrink-0">
+                <div className="w-full bg-white border-t border-slate-200 py-4 px-8 flex justify-between items-center shrink-0 relative z-30">
                     <p className="text-[10px] text-slate-400 font-sans">نظام المفتش التربوي الرقمي</p>
                     <div className="flex gap-1"><div className="w-2 h-2 rounded-full bg-blue-600"></div><div className="w-2 h-2 rounded-full bg-yellow-500"></div><div className="w-2 h-2 rounded-full bg-red-600"></div></div>
                 </div>
@@ -106,7 +177,7 @@ const ReadyMadeSeminars: React.FC<ReadyMadeSeminarsProps> = ({ inspectorInfo }) 
         );
     }
 
-    // --- GRID VIEW ---
+    // --- GRID VIEW (UNCHANGED) ---
     return (
         <div className="p-6 md:p-8 animate-in fade-in">
             <div className="max-w-7xl mx-auto">
@@ -132,8 +203,16 @@ const ReadyMadeSeminars: React.FC<ReadyMadeSeminarsProps> = ({ inspectorInfo }) 
                             <div 
                                 key={idx}
                                 onClick={() => setActiveTopic(topic)}
-                                className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer group flex flex-col items-center text-center h-full min-h-[220px]"
+                                className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer group flex flex-col items-center text-center h-full min-h-[220px] relative overflow-hidden"
                             >
+                                {/* Interactive Badge */}
+                                {topic.is_interactive && (
+                                    <div className="absolute top-0 right-0 bg-purple-600 text-white text-[9px] px-3 py-1 rounded-bl-xl font-bold flex items-center gap-1 shadow-sm z-10">
+                                        <Smartphone size={10} />
+                                        <span>تفاعلي</span>
+                                    </div>
+                                )}
+                                
                                 <div className={`w-16 h-16 rounded-2xl ${topic.color || 'bg-blue-600'} text-white flex items-center justify-center mb-6 shadow-lg group-hover:rotate-6 transition-transform`}>
                                     <Presentation size={32} />
                                 </div>

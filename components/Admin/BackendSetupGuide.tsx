@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Database, Server, Key, Copy, Check, Terminal, Globe, ShieldCheck, Info, Youtube, HardDrive, Laptop, Globe2, AlertTriangle, Zap, Loader2, ExternalLink, RadioReceiver, ArrowLeftRight, CreditCard } from 'lucide-react';
 import { supabase } from '../../services/supabaseService';
@@ -73,20 +74,28 @@ create table if not exists public.profiles (
 -- 2. تفعيل نظام الحماية (RLS)
 alter table public.profiles enable row level security;
 
--- 3. سياسات الأمان
+-- 3. تنظيف السياسات القديمة (لتجنب الأخطاء)
+drop policy if exists "Public profiles are viewable by everyone." on public.profiles;
+drop policy if exists "Users can insert their own profile." on public.profiles;
+drop policy if exists "Users can update own profile." on public.profiles;
+
+-- 4. إنشاء السياسات
 create policy "Public profiles are viewable by everyone." on public.profiles for select using (true);
 create policy "Users can insert their own profile." on public.profiles for insert with check (auth.uid() = id);
 create policy "Users can update own profile." on public.profiles for update using (auth.uid() = id);
 
--- 4. إعداد التخزين (Storage)
+-- 5. إعداد التخزين (Storage)
 insert into storage.buckets (id, name, public) 
 values ('receipts', 'receipts', true)
 on conflict (id) do nothing;
 
+drop policy if exists "Anyone can upload receipts" on storage.objects;
+drop policy if exists "Anyone can view receipts" on storage.objects;
+
 create policy "Anyone can upload receipts" on storage.objects for insert with check ( bucket_id = 'receipts' );
 create policy "Anyone can view receipts" on storage.objects for select using ( bucket_id = 'receipts' );
 
--- 5. دالة الإنشاء التلقائي
+-- 6. دالة الإنشاء التلقائي
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
@@ -96,7 +105,7 @@ begin
 end;
 $$ language plpgsql security definer;
 
--- 6. تفعيل الدالة
+-- 7. تفعيل الدالة
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
@@ -111,13 +120,27 @@ create table if not exists public_seminars (
   created_at timestamp with time zone default now(),
   title text not null, 
   url text not null,   
-  color text default 'bg-blue-600'
+  color text default 'bg-blue-600',
+  is_interactive boolean default false
 );
 
--- 2. تفعيل الحماية
+-- 2. تحديث الهيكل (إضافة العمود إذا لم يكن موجوداً)
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_name = 'public_seminars' and column_name = 'is_interactive') then
+    alter table public_seminars add column is_interactive boolean default false;
+  end if;
+end $$;
+
+-- 3. تفعيل الحماية
 alter table public_seminars enable row level security;
 
--- 3. السياسات
+-- 4. حذف السياسات القديمة لتجنب التكرار (تحديث)
+drop policy if exists "Public Seminars are viewable by everyone" on public_seminars;
+drop policy if exists "Admins can insert seminars" on public_seminars;
+drop policy if exists "Admins can delete seminars" on public_seminars;
+
+-- 5. إنشاء السياسات
 create policy "Public Seminars are viewable by everyone" 
 on public_seminars for select using ( true );
 
@@ -311,7 +334,7 @@ Deno.serve(async (req) => {
                                 <p className="leading-relaxed mb-2">
                                     انسخ هذا الكود وضعه في <strong>SQL Editor</strong> في Supabase واضغط Run.
                                     <br/>
-                                    <span className="text-xs opacity-70">(إذا قمت بذلك سابقاً، يمكنك تجاوزه).</span>
+                                    <span className="text-xs opacity-70">(هذا الكود آمن، سيقوم بإنشاء الجداول وحذف السياسات القديمة تلقائياً).</span>
                                 </p>
                             </div>
                         </div>
@@ -328,7 +351,7 @@ Deno.serve(async (req) => {
                             <div>
                                 <strong className="block mb-2 font-bold text-lg">الخطوة الثانية: جدول العروض</strong>
                                 <p className="leading-relaxed">
-                                    هذا الجدول خاص بتخزين "العروض الجاهزة" التي تظهر للمفتش.
+                                    هذا الجدول خاص بتخزين "العروض الجاهزة". الكود يقوم بإضافة العمود <code>is_interactive</code> ويصلح أخطاء السياسات المكررة.
                                 </p>
                             </div>
                         </div>
@@ -338,6 +361,7 @@ Deno.serve(async (req) => {
                     </div>
                 )}
 
+                {/* Rest of the steps ... */}
                 {activeStep === 3 && (
                     <div className="space-y-4">
                          <div className="flex items-start gap-3 text-purple-300 text-sm bg-purple-500/10 p-4 rounded-lg border border-purple-500/20">

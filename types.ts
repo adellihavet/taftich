@@ -240,6 +240,7 @@ export interface SeminarEvent {
     targetLevels: string[];
     supervisor: string;
     notes: string;
+    isInteractive?: boolean; // New field for Interactive Mode
 }
 
 export interface LibraryLink {

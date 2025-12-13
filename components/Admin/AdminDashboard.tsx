@@ -3,8 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { fetchPendingRequests, approveSubscription, rejectSubscription } from '../../services/subscriptionService';
 import { fetchSeminars, addSeminar, deleteSeminar, RemoteSeminar } from '../../services/supabaseService';
 import { UserProfile } from '../../types';
-import { Check, X, Eye, Shield, Users, RefreshCw, AlertCircle, Calendar, Presentation, Plus, Trash2, Link, Database, Code2 } from 'lucide-react';
-import BackendSetupGuide from './BackendSetupGuide'; // Import the new guide
+import { Check, X, Eye, Shield, Users, RefreshCw, AlertCircle, Calendar, Presentation, Plus, Trash2, Link, Database, Code2, Smartphone } from 'lucide-react';
+import BackendSetupGuide from './BackendSetupGuide';
 
 const AdminDashboard: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'subs' | 'content' | 'setup'>('subs');
@@ -18,7 +18,7 @@ const AdminDashboard: React.FC = () => {
     // Seminars State
     const [seminars, setSeminars] = useState<RemoteSeminar[]>([]);
     const [isSeminarsLoading, setIsSeminarsLoading] = useState(false);
-    const [newSeminar, setNewSeminar] = useState({ title: '', url: '', color: 'bg-blue-600' });
+    const [newSeminar, setNewSeminar] = useState({ title: '', url: '', color: 'bg-blue-600', is_interactive: false });
     const [isAddingSeminar, setIsAddingSeminar] = useState(false);
 
     useEffect(() => {
@@ -85,7 +85,7 @@ const AdminDashboard: React.FC = () => {
         if (error) {
             alert("فشل الإضافة: " + error.message);
         } else {
-            setNewSeminar({ title: '', url: '', color: 'bg-blue-600' });
+            setNewSeminar({ title: '', url: '', color: 'bg-blue-600', is_interactive: false });
             loadSeminars(); // Refresh list
         }
         setIsAddingSeminar(false);
@@ -266,6 +266,24 @@ const AdminDashboard: React.FC = () => {
                                     إضافة عرض جديد
                                 </h3>
                                 <form onSubmit={handleAddSeminar} className="space-y-4">
+                                    
+                                    {/* INTERACTIVE TOGGLE */}
+                                    <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                        <div className="flex items-center gap-2">
+                                            <Smartphone size={18} className={newSeminar.is_interactive ? "text-purple-600" : "text-slate-400"} />
+                                            <span className="text-sm font-bold text-slate-700">عرض تفاعلي</span>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={newSeminar.is_interactive}
+                                                onChange={e => setNewSeminar({...newSeminar, is_interactive: e.target.checked})}
+                                                className="sr-only peer"
+                                            />
+                                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                                        </label>
+                                    </div>
+
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 mb-1">عنوان العرض</label>
                                         <input 
@@ -332,10 +350,13 @@ const AdminDashboard: React.FC = () => {
                                         {seminars.map(sem => (
                                             <div key={sem.id} className="p-4 flex items-center gap-4 hover:bg-slate-50 transition-colors group">
                                                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shrink-0 ${sem.color || 'bg-blue-600'}`}>
-                                                    <Presentation size={24}/>
+                                                    {sem.is_interactive ? <Smartphone size={24} /> : <Presentation size={24}/>}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <h4 className="font-bold text-slate-800 text-base">{sem.title}</h4>
+                                                    <div className="flex items-center gap-2">
+                                                        <h4 className="font-bold text-slate-800 text-base">{sem.title}</h4>
+                                                        {sem.is_interactive && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">تفاعلي</span>}
+                                                    </div>
                                                     <a href={sem.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline truncate block mt-1 dir-ltr text-right">{sem.url}</a>
                                                 </div>
                                                 <button 

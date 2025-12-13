@@ -96,6 +96,7 @@ export interface RemoteSeminar {
     title: string;
     url: string;
     color: string;
+    is_interactive?: boolean; // New Field
     created_at?: string;
 }
 

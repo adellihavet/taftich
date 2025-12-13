@@ -1,11 +1,11 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Presentation, Printer, Users, FileText, CheckSquare, X, School, MapPin, CalendarDays, Plus, Trash2, Edit, Save, AlertCircle, Lock } from 'lucide-react';
+import { Presentation, Printer, Users, FileText, CheckSquare, X, School, MapPin, CalendarDays, Plus, Trash2, Edit, Save, AlertCircle, Lock, Smartphone, Monitor, QrCode, Copy, Share2, Play, Radio, ArrowRight } from 'lucide-react';
 import { Teacher, ReportData, SeminarEvent } from '../types';
 import VoiceInput from './VoiceInput';
 import VoiceTextarea from './VoiceTextarea';
-import ReadyMadeSeminars from './ReadyMadeSeminars'; // Import the new component
+import ReadyMadeSeminars from './ReadyMadeSeminars'; 
 
 interface SeminarsManagerProps {
     teachers: Teacher[];
@@ -75,11 +75,15 @@ const SeminarsManager: React.FC<SeminarsManagerProps> = ({
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentEvent, setCurrentEvent] = useState<SeminarEvent | null>(null);
 
+    // --- LOBBY STATE (Interactive Mode) ---
+    const [activeLobbyEvent, setActiveLobbyEvent] = useState<SeminarEvent | null>(null);
+    const [attendeeCount, setAttendeeCount] = useState(0);
+    const lobbyTimerRef = useRef<any>(null);
+
     // --- HANDLE INCOMING TOPIC (from Dashboard) ---
     useEffect(() => {
         if (initialTopic) {
             setSubView('calendar');
-            // Create a fresh event with the topic
             const newEvent: SeminarEvent = {
                 id: Math.random().toString(36).substr(2, 9),
                 topic: initialTopic,
@@ -89,15 +93,35 @@ const SeminarsManager: React.FC<SeminarsManagerProps> = ({
                 duration: '1/2 يوم',
                 targetLevels: [],
                 supervisor: 'مفتش المقاطعة',
-                notes: ''
+                notes: '',
+                isInteractive: false
             };
             setCurrentEvent(newEvent);
             setIsModalOpen(true);
             
-            // Clear the topic in parent to avoid re-triggering
             if (onClearInitialTopic) onClearInitialTopic();
         }
     }, [initialTopic, onClearInitialTopic]);
+
+    // --- LOBBY SIMULATION ---
+    useEffect(() => {
+        if (activeLobbyEvent) {
+            // Reset counter
+            setAttendeeCount(0);
+            // Simulate attendees joining
+            lobbyTimerRef.current = setInterval(() => {
+                setAttendeeCount(prev => {
+                    const add = Math.floor(Math.random() * 3); // 0, 1, or 2 join
+                    return Math.min(prev + add, 45); // Max 45 attendees
+                });
+            }, 2500);
+        } else {
+            if (lobbyTimerRef.current) clearInterval(lobbyTimerRef.current);
+        }
+        return () => {
+            if (lobbyTimerRef.current) clearInterval(lobbyTimerRef.current);
+        };
+    }, [activeLobbyEvent]);
 
     // --- SHARED HELPERS ---
     const availableSchools = useMemo(() => {
@@ -164,7 +188,8 @@ const SeminarsManager: React.FC<SeminarsManagerProps> = ({
             duration: '1/2 يوم',
             targetLevels: [],
             supervisor: 'مفتش المقاطعة',
-            notes: ''
+            notes: '',
+            isInteractive: false
         };
         setCurrentEvent(newEvent);
         setIsModalOpen(true);
@@ -200,12 +225,28 @@ const SeminarsManager: React.FC<SeminarsManagerProps> = ({
         setCurrentEvent(null);
     };
 
+    const handleStartEvent = (event: SeminarEvent) => {
+        if (event.isInteractive) {
+            setActiveLobbyEvent(event);
+        } else {
+            // Just simulate starting a normal presentation
+             if (confirm(`هل تريد بدء العرض التلقيني: "${event.topic}"؟`)) {
+                 alert("تم بدء العرض (وضع العرض التلقيني).");
+             }
+        }
+    };
+
     const handlePrint = () => {
         if (isExpired) {
             onUpgradeClick && onUpgradeClick();
         } else {
             window.print();
         }
+    };
+
+    const handleCopyLink = (text: string) => {
+        navigator.clipboard.writeText(text);
+        alert("تم نسخ رابط المشاركة!");
     };
 
     return (
@@ -278,7 +319,7 @@ const SeminarsManager: React.FC<SeminarsManagerProps> = ({
                 </div>
             )}
 
-            {/* --- SEMINAR ADD/EDIT MODAL (NEW) --- */}
+            {/* --- SEMINAR ADD/EDIT MODAL --- */}
             {isModalOpen && currentEvent && subView === 'calendar' && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm print:hidden animate-in fade-in zoom-in-95">
                     <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -291,6 +332,32 @@ const SeminarsManager: React.FC<SeminarsManagerProps> = ({
                         </div>
                         
                         <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+                            
+                            {/* NEW: INTERACTIVE TOGGLE */}
+                            <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${currentEvent.isInteractive ? 'bg-purple-600 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                                        {currentEvent.isInteractive ? <Smartphone size={20} /> : <Monitor size={20} />}
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-indigo-900 text-sm">نوع العرض</h4>
+                                        <p className="text-xs text-indigo-600/70">
+                                            {currentEvent.isInteractive ? 'عرض تفاعلي (يتطلب مشاركة عبر الهاتف)' : 'عرض تلقيني (إلقاء تقليدي)'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        className="sr-only peer" 
+                                        checked={currentEvent.isInteractive || false}
+                                        onChange={(e) => setCurrentEvent({ ...currentEvent, isInteractive: e.target.checked })}
+                                    />
+                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                                    <span className="ml-3 text-sm font-medium text-gray-900">تفاعلي</span>
+                                </label>
+                            </div>
+
                             {/* Topic */}
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 mb-1">موضوع العملية</label>
@@ -430,6 +497,93 @@ const SeminarsManager: React.FC<SeminarsManagerProps> = ({
                 </div>
             )}
 
+            {/* --- INTERACTIVE LOBBY MODAL --- */}
+            {activeLobbyEvent && (
+                <div className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-md flex items-center justify-center p-4 animate-in zoom-in-95 duration-300">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden relative border border-slate-700/50 flex flex-col md:flex-row h-[85vh] max-h-[700px]">
+                        
+                        <button 
+                            onClick={() => setActiveLobbyEvent(null)}
+                            className="absolute top-4 left-4 z-50 p-2 bg-white/10 hover:bg-white/20 text-white/50 hover:text-white rounded-full transition-all"
+                        >
+                            <X size={24} />
+                        </button>
+
+                        {/* Left: Engagement Visuals */}
+                        <div className="w-full md:w-5/12 bg-gradient-to-br from-indigo-900 to-violet-900 text-white p-10 flex flex-col justify-between relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-full h-full opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white via-transparent to-transparent"></div>
+                            
+                            <div className="relative z-10">
+                                <div className="inline-flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full border border-white/10 mb-6">
+                                    <span className="relative flex h-3 w-3">
+                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                      <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                                    </span>
+                                    <span className="text-xs font-bold tracking-widest uppercase">Live Session</span>
+                                </div>
+                                <h2 className="text-3xl md:text-4xl font-bold font-serif leading-tight mb-4">
+                                    {activeLobbyEvent.topic}
+                                </h2>
+                                <p className="text-indigo-200 text-sm">{inspectorInfo.wilaya} - {inspectorInfo.district}</p>
+                            </div>
+
+                            <div className="relative z-10 mt-auto">
+                                <div className="text-center p-6 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-sm">
+                                    <p className="text-indigo-200 text-xs font-bold uppercase mb-2">عدد المتصلين الآن</p>
+                                    <div className="text-6xl font-bold font-mono tracking-tighter tabular-nums flex items-center justify-center gap-2">
+                                        <Users size={32} className="text-indigo-400"/>
+                                        {attendeeCount}
+                                    </div>
+                                    <p className="text-[10px] text-indigo-300/50 mt-2 animate-pulse">جاري الاتصال...</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Right: Joining Info */}
+                        <div className="flex-1 bg-white p-10 flex flex-col items-center justify-center text-center relative">
+                            
+                            <div className="mb-8">
+                                <h3 className="text-2xl font-bold text-slate-800 mb-2">انضم للجلسة التفاعلية</h3>
+                                <p className="text-slate-500">امسح الرمز بهاتفك أو استخدم الرابط أدناه</p>
+                            </div>
+
+                            <div className="bg-white p-4 rounded-3xl shadow-xl border-4 border-slate-100 mb-8 transform hover:scale-105 transition-transform duration-300">
+                                {/* Use generic QR API */}
+                                <img 
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://live.mufattish.dz/join/${activeLobbyEvent.id}`} 
+                                    alt="QR Code" 
+                                    className="w-64 h-64 object-contain mix-blend-multiply"
+                                />
+                            </div>
+
+                            <div className="w-full max-w-sm">
+                                <div className="flex items-center gap-2 bg-slate-100 p-2 pl-4 rounded-xl border border-slate-200 mb-6 group">
+                                    <span className="flex-1 text-left text-slate-600 font-mono text-sm truncate dir-ltr">
+                                        live.mufattish.dz/join/{activeLobbyEvent.id.substring(0,4)}
+                                    </span>
+                                    <button 
+                                        onClick={() => handleCopyLink(`https://live.mufattish.dz/join/${activeLobbyEvent.id}`)}
+                                        className="p-2 bg-white text-slate-500 hover:text-indigo-600 rounded-lg shadow-sm hover:shadow transition-all"
+                                        title="نسخ الرابط"
+                                    >
+                                        <Copy size={16}/>
+                                    </button>
+                                </div>
+
+                                <button 
+                                    onClick={() => alert("تم بدء الجلسة! (سيتم توجيهك لشاشة العرض)")}
+                                    className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold text-lg hover:bg-black transition-all shadow-lg hover:shadow-2xl flex items-center justify-center gap-3 group"
+                                >
+                                    <span>انطلاق الجلسة</span>
+                                    <ArrowRight className="group-hover:-translate-x-1 transition-transform"/>
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            )}
+
             {/* ======================= ATTENDANCE & INQUIRY VIEW ======================= */}
             {subView === 'attendance' && (
                 <div className="p-6 md:p-8 flex-1 overflow-y-auto print:hidden animate-in fade-in">
@@ -551,6 +705,7 @@ const SeminarsManager: React.FC<SeminarsManagerProps> = ({
                                     <thead className="bg-slate-50 text-slate-600 font-bold border-b">
                                         <tr>
                                             <th className="p-3 w-10">#</th>
+                                            <th className="p-3 w-8">نوع</th>
                                             <th className="p-3">موضوع العملية</th>
                                             <th className="p-3 w-28">التاريخ</th>
                                             <th className="p-3 w-32">المكان</th>
@@ -558,7 +713,6 @@ const SeminarsManager: React.FC<SeminarsManagerProps> = ({
                                             <th className="p-3">الفئة المستهدفة</th>
                                             <th className="p-3 w-20">العدد</th>
                                             <th className="p-3 w-32">المشرف</th>
-                                            <th className="p-3 w-32">ملاحظات</th>
                                             <th className="p-3 w-24 text-center">إجراءات</th>
                                         </tr>
                                     </thead>
@@ -568,7 +722,17 @@ const SeminarsManager: React.FC<SeminarsManagerProps> = ({
                                             return (
                                                 <tr key={row.id} className="hover:bg-slate-50 group">
                                                     <td className="p-3 text-slate-400 font-mono">{idx + 1}</td>
-                                                    <td className="p-3 font-bold text-slate-800">{row.topic}</td>
+                                                    <td className="p-3 text-center" title={row.isInteractive ? "تفاعلي" : "عادي"}>
+                                                        {row.isInteractive ? (
+                                                            <Smartphone size={16} className="text-purple-600 mx-auto" />
+                                                        ) : (
+                                                            <Monitor size={16} className="text-slate-400 mx-auto" />
+                                                        )}
+                                                    </td>
+                                                    <td className="p-3 font-bold text-slate-800">
+                                                        {row.topic}
+                                                        {row.isInteractive && <span className="mr-2 text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200">تفاعلي</span>}
+                                                    </td>
                                                     <td className="p-3 text-slate-600 dir-ltr">{new Date(row.date).toLocaleDateString('ar-DZ')}</td>
                                                     <td className="p-3 text-slate-600">{row.location || '-'}</td>
                                                     <td className="p-3 text-slate-600">{row.duration}</td>
@@ -585,11 +749,17 @@ const SeminarsManager: React.FC<SeminarsManagerProps> = ({
                                                         <span className="font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded text-xs">{autoCount}</span>
                                                     </td>
                                                     <td className="p-3 text-slate-600 text-xs">{row.supervisor}</td>
-                                                    <td className="p-3 text-slate-400 text-xs truncate max-w-[150px]">{row.notes}</td>
                                                     <td className="p-3 text-center">
-                                                        <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button onClick={() => handleEditEvent(row)} className="text-blue-500 hover:bg-blue-50 p-1 rounded"><Edit size={16}/></button>
-                                                            <button onClick={() => handleDeleteEvent(row.id)} className="text-red-400 hover:bg-red-50 p-1 rounded"><Trash2 size={16}/></button>
+                                                        <div className="flex items-center justify-center gap-1">
+                                                            <button 
+                                                                onClick={() => handleStartEvent(row)} 
+                                                                className={`p-1.5 rounded transition-colors ${row.isInteractive ? 'text-purple-600 hover:bg-purple-50' : 'text-blue-500 hover:bg-blue-50'}`}
+                                                                title={row.isInteractive ? "بدء الجلسة التفاعلية" : "بدء العرض"}
+                                                            >
+                                                                {row.isInteractive ? <Radio size={16}/> : <Play size={16}/>}
+                                                            </button>
+                                                            <button onClick={() => handleEditEvent(row)} className="text-slate-400 hover:text-blue-500 hover:bg-slate-100 p-1.5 rounded"><Edit size={16}/></button>
+                                                            <button onClick={() => handleDeleteEvent(row.id)} className="text-slate-400 hover:text-red-500 hover:bg-slate-100 p-1.5 rounded"><Trash2 size={16}/></button>
                                                         </div>
                                                     </td>
                                                 </tr>
