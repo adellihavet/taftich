@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Presentation, Play, X, ExternalLink, School, MonitorPlay, Loader2, WifiOff, Smartphone, Users, Copy, ScanLine } from 'lucide-react';
+import { Presentation, Play, X, ExternalLink, School, MonitorPlay, Loader2, WifiOff, Smartphone, Copy, ScanLine } from 'lucide-react';
 import { fetchSeminars, RemoteSeminar } from '../services/supabaseService';
 
 interface ReadyMadeSeminarsProps {
@@ -16,10 +16,6 @@ const ReadyMadeSeminars: React.FC<ReadyMadeSeminarsProps> = ({ inspectorInfo }) 
     const [topics, setTopics] = useState<RemoteSeminar[]>([]);
     const [loading, setLoading] = useState(true);
     
-    // Interactive Mode States
-    const [attendeeCount, setAttendeeCount] = useState(0);
-    const lobbyTimerRef = useRef<any>(null);
-
     const currentYear = new Date().getFullYear();
     const nextYear = currentYear + 1;
 
@@ -36,26 +32,6 @@ const ReadyMadeSeminars: React.FC<ReadyMadeSeminarsProps> = ({ inspectorInfo }) 
         };
         load();
     }, []);
-
-    // --- SIMULATE ATTENDEES FOR INTERACTIVE MODE ---
-    useEffect(() => {
-        if (activeTopic?.is_interactive) {
-            setAttendeeCount(0);
-            lobbyTimerRef.current = setInterval(() => {
-                setAttendeeCount(prev => {
-                    // Simulate random joins up to a realistic number
-                    if (prev >= 45) return prev;
-                    const add = Math.floor(Math.random() * 3); 
-                    return prev + add;
-                });
-            }, 2500);
-        } else {
-            if (lobbyTimerRef.current) clearInterval(lobbyTimerRef.current);
-        }
-        return () => {
-            if (lobbyTimerRef.current) clearInterval(lobbyTimerRef.current);
-        };
-    }, [activeTopic]);
 
     // --- FULL SCREEN PRESENTATION MODE ---
     if (activeTopic) {
@@ -130,7 +106,7 @@ const ReadyMadeSeminars: React.FC<ReadyMadeSeminarsProps> = ({ inspectorInfo }) 
                     </div>
                 </div>
 
-                {/* === INTERACTIVE QR CODES (BOTTOM CORNERS) === */}
+                {/* === INTERACTIVE QR CODES (BOTTOM CORNERS - NO FAKE COUNTER) === */}
                 {activeTopic.is_interactive && (
                     <>
                         {/* RIGHT QR */}
@@ -141,11 +117,7 @@ const ReadyMadeSeminars: React.FC<ReadyMadeSeminarsProps> = ({ inspectorInfo }) 
                                 className="w-32 h-32 object-contain mb-2"
                             />
                             <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">امسح للانضمام</p>
-                                <div className="flex items-center justify-center gap-1 bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs font-bold">
-                                    <Users size={10} />
-                                    <span>{attendeeCount} متصل</span>
-                                </div>
+                                <p className="text-[12px] font-bold text-slate-600 uppercase tracking-wider">امسح للانضمام</p>
                             </div>
                         </div>
 
@@ -157,11 +129,7 @@ const ReadyMadeSeminars: React.FC<ReadyMadeSeminarsProps> = ({ inspectorInfo }) 
                                 className="w-32 h-32 object-contain mb-2"
                             />
                             <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">امسح للانضمام</p>
-                                <div className="flex items-center justify-center gap-1 bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs font-bold">
-                                    <Users size={10} />
-                                    <span>{attendeeCount} متصل</span>
-                                </div>
+                                <p className="text-[12px] font-bold text-slate-600 uppercase tracking-wider">امسح للانضمام</p>
                             </div>
                         </div>
                     </>
@@ -183,7 +151,7 @@ const ReadyMadeSeminars: React.FC<ReadyMadeSeminarsProps> = ({ inspectorInfo }) 
             <div className="max-w-7xl mx-auto">
                 <div className="text-center mb-10">
                     <h2 className="text-3xl font-bold text-slate-800 font-serif mb-2">حقيبة الندوات الجاهزة (Live)</h2>
-                    <p className="text-slate-500">اختر موضوعاً لبدء العرض التكويني بضغطة زر. المحتوى يتم تحديثه سحابياً.</p>
+                    <p className="text-slate-500">اختر موضوعاً لبدء العرض التكويني بضغطة زر.( إن كان العرض تفاعليا يرجى توجيه الأساتذة لنقل الرابط الذي سيظهر أو نسخ الكود مباشرة من هواتفهم )ً.</p>
                 </div>
 
                 {loading ? (
